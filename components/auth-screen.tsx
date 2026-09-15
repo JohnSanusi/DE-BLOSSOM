@@ -12,6 +12,7 @@ export default function AuthScreen() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
 
   async function handleGoogleSignIn() {
     setLoading(true);
@@ -53,13 +54,28 @@ export default function AuthScreen() {
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const result = mode === "sign-in"
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({
+            email,
+            password,
+            options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+          });
+
+      const { error, data } = result;
 
       if (error) {
         setMessage(error.message);
+        return;
+      }
+
+      if (mode === "sign-up") {
+        if (data.session) {
+          router.push("/");
+          router.refresh();
+        } else {
+          setMessage("Account created. Check your email to confirm your account before signing in.");
+        }
         return;
       }
 
@@ -113,11 +129,15 @@ export default function AuthScreen() {
             </p>
           </div>
           <p className="text-sm font-semibold uppercase tracking-widest text-emerald-700">
-            Welcome back
+            {mode === "sign-in" ? "Welcome back" : "Join De-Blossom"}
           </p>
-          <h2 className="mt-2 text-3xl font-bold">Sign in</h2>
+          <h2 className="mt-2 text-3xl font-bold">
+            {mode === "sign-in" ? "Sign in" : "Create account"}
+          </h2>
           <p className="mt-2 text-sm text-slate-500">
-            Enter your email and password.
+            {mode === "sign-in"
+              ? "Use your email and password."
+              : "New accounts start with member access."}
           </p>
           <form className="mt-8 grid gap-5" onSubmit={handleSubmit}>
             <label className="grid gap-2 text-sm font-medium">
@@ -146,7 +166,8 @@ export default function AuthScreen() {
               </p>
             )}
             <Button className="h-11 w-full" type="submit">
-              Sign in <ArrowRight data-icon="inline-end" />
+              {mode === "sign-in" ? "Sign in" : "Create account"}
+              <ArrowRight data-icon="inline-end" />
             </Button>
           </form>
           <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
@@ -164,6 +185,18 @@ export default function AuthScreen() {
             <Chrome data-icon="inline-start" />
             Continue with Google
           </Button>
+          <button
+            className="mt-4 w-full text-sm font-medium text-emerald-700"
+            type="button"
+            onClick={() => {
+              setMode(mode === "sign-in" ? "sign-up" : "sign-in");
+              setMessage("");
+            }}
+          >
+            {mode === "sign-in"
+              ? "Need an account? Create a member account"
+              : "Already have an account? Sign in"}
+          </button>
           <div className="mt-6 rounded-xl bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
             <div className="flex items-center gap-2 font-semibold">
               <LockKeyhole className="size-4" />
