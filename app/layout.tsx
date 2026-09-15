@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Kano Cooperative Society | Member Portal',
-  description: 'A modern financial management portal for Kano Cooperative Society members and administrators.',
+  title: 'De-Blossom Cooperative Society | Member Portal',
+  description: 'A modern financial management portal for De-Blossom Cooperative Society members and administrators.',
   generator: 'v0.app',
   icons: {
     icon: [

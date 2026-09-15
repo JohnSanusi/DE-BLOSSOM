@@ -84,7 +84,7 @@ export default function AuthScreen() {
             K
           </div>
           <p className="mt-12 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-100">
-            Kano Cooperative Society
+            De-Blossom Cooperative Society
           </p>
           <h1 className="mt-4 max-w-md text-4xl font-bold leading-tight">
             Your cooperative records, made simple.
@@ -109,7 +109,7 @@ export default function AuthScreen() {
               K
             </div>
             <p className="mt-4 text-sm font-semibold text-emerald-700">
-              Kano Cooperative Society
+              De-Blossom Cooperative Society
             </p>
           </div>
           <p className="text-sm font-semibold uppercase tracking-widest text-emerald-700">
