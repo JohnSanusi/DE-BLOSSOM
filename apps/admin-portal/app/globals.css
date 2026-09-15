@@ -13,16 +13,26 @@ button { cursor: pointer; }
 .kicker { color: var(--green); font: 700 12px Arial, sans-serif; letter-spacing: .16em; text-transform: uppercase; }
 .panel { border: 1px solid var(--line); border-radius: 18px; background: white; box-shadow: 0 16px 45px rgba(23, 53, 35, .07); }
 .form { padding: 32px; display: grid; gap: 16px; }
+.auth-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 10px; border-radius: 11px; background: #f0f4f0; }
+.auth-switch button { padding: 10px; background: transparent; color: var(--muted); border-radius: 8px; }
+.auth-switch button.active { background: white; color: var(--green); box-shadow: 0 2px 8px rgba(23, 53, 35, .1); }
 .form h2 { margin: 0 0 8px; font-size: 34px; font-weight: 500; }
 label { display: grid; gap: 7px; font: 600 13px Arial, sans-serif; }
 input { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 12px; color: var(--ink); outline: none; }
 input:focus { border-color: var(--green); box-shadow: 0 0 0 3px #176b4d1c; }
 button { border: 0; border-radius: 9px; padding: 13px 16px; background: var(--green); color: white; font: 700 13px Arial, sans-serif; }
 button:disabled { cursor: wait; opacity: .6; }
+.primary-action { margin-top: 4px; }
+.password-field { position: relative; }
+.password-field input { padding-right: 46px; }
+.password-toggle { position: absolute; top: 50%; right: 4px; display: grid; place-items: center; padding: 8px; transform: translateY(-50%); background: transparent; color: var(--muted); }
+.password-toggle:hover { color: var(--green); }
 .secondary { background: white; color: var(--green); border: 1px solid var(--line); }
 .divider { color: var(--muted); text-align: center; font: 12px Arial, sans-serif; }
+.divider span { padding: 0 10px; }
 .error { margin: 0; color: #a33b32; font: 13px Arial, sans-serif; }
 .muted { color: var(--muted); font: 14px Arial, sans-serif; }
+.trust-note { display: flex; align-items: center; gap: 8px; margin-top: 28px; color: var(--muted); font: 13px Arial, sans-serif; }
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 0 56px; font: 700 18px Arial, sans-serif; }
 .brand { margin-left: 10px; vertical-align: middle; }
 .link-button { padding: 8px 0; background: transparent; color: var(--green); }

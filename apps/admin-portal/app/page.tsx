@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { Eye, EyeOff, LockKeyhole } from 'lucide-react'
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,6 +13,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -60,5 +62,5 @@ export default function AuthPage() {
     }
   }
 
-  return <main className="page"><section className="auth-layout"><div className="intro"><span className="mark">D</span><p className="kicker">De-Blossom Cooperative Society</p><h1>Your cooperative records, made simple.</h1><p className="intro-copy">Create an account or sign in to view your savings, shares, loans, and repayments.</p></div><div className="panel form"><p className="kicker">{mode === 'sign-in' ? 'Welcome back' : 'Join De-Blossom'}</p><h2>{mode === 'sign-in' ? 'Sign in' : 'Create account'}</h2><p className="muted">{mode === 'sign-in' ? 'Members and admins use this same form.' : 'New accounts receive member access.'}</p><form onSubmit={submit}><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label>Password<input type="password" minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{message && <p className="error">{message}</p>}<button type="submit" disabled={loading}>{mode === 'sign-in' ? 'Sign in' : 'Create account'}</button></form><div className="divider">or</div><button className="secondary" type="button" onClick={googleSignIn} disabled={loading}>Continue with Google</button><button className="link-button" type="button" onClick={() => { setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in'); setMessage('') }}>{mode === 'sign-in' ? 'Need an account? Create one' : 'Already have an account? Sign in'}</button></div></section></main>
+  return <main className="page"><section className="auth-layout"><div className="intro"><span className="mark">D</span><p className="kicker">De-Blossom Cooperative Society</p><h1>Your cooperative records, made simple.</h1><p className="intro-copy">Create an account or sign in to view your savings, shares, loans, and repayments.</p><div className="trust-note"><LockKeyhole size={16} /><span>Secure access powered by Supabase</span></div></div><div className="panel form"><div className="auth-switch" role="tablist" aria-label="Authentication mode"><button className={mode === 'sign-in' ? 'active' : ''} type="button" role="tab" aria-selected={mode === 'sign-in'} onClick={() => { setMode('sign-in'); setMessage('') }}>Sign in</button><button className={mode === 'sign-up' ? 'active' : ''} type="button" role="tab" aria-selected={mode === 'sign-up'} onClick={() => { setMode('sign-up'); setMessage('') }}>Create account</button></div><p className="kicker">{mode === 'sign-in' ? 'Welcome back' : 'Join De-Blossom'}</p><h2>{mode === 'sign-in' ? 'Sign in to your account' : 'Create your account'}</h2><p className="muted">{mode === 'sign-in' ? 'Enter your details to continue.' : 'Your new account starts with member access.'}</p><form onSubmit={submit}><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label>Password<div className="password-field"><input type={showPassword ? 'text' : 'password'} minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} required /><button className="password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>{message && <p className="error">{message}</p>}<button className="primary-action" type="submit" disabled={loading}>{loading ? 'Please wait...' : mode === 'sign-in' ? 'Sign in' : 'Create account'}</button></form><div className="divider"><span>or continue with</span></div><button className="secondary" type="button" onClick={googleSignIn} disabled={loading}>Continue with Google</button></div></section></main>
 }
