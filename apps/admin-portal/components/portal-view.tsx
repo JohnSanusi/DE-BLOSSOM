@@ -2,15 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '../lib/supabase-browser'
 
 type Role = 'member' | 'admin'
 type Profile = { full_name: string; email: string; member_number: string; role: Role }
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-)
 
 function money(value: number) {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(value)
@@ -25,6 +20,7 @@ export default function PortalView({ requiredRole }: { requiredRole: Role }) {
   useEffect(() => { void load() }, [])
 
   async function load() {
+    const supabase = getSupabaseBrowserClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.replace('/'); return }
 
@@ -50,6 +46,7 @@ export default function PortalView({ requiredRole }: { requiredRole: Role }) {
   }
 
   async function signOut() {
+    const supabase = getSupabaseBrowserClient()
     await supabase.auth.signOut()
     router.replace('/')
   }

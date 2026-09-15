@@ -1,13 +1,8 @@
 'use client'
 
 import { FormEvent, useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { Eye, EyeOff, LockKeyhole } from 'lucide-react'
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-)
+import { getSupabaseBrowserClient } from '../lib/supabase-browser'
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in')
@@ -20,11 +15,13 @@ export default function AuthPage() {
   useEffect(() => { void redirectExistingSession() }, [])
 
   async function redirectExistingSession() {
+    const supabase = getSupabaseBrowserClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user) await redirectByRole(user.id)
   }
 
   async function redirectByRole(userId: string) {
+    const supabase = getSupabaseBrowserClient()
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle()
     window.location.replace(profile?.role === 'admin' ? '/admin' : '/member')
   }
@@ -33,6 +30,7 @@ export default function AuthPage() {
     event.preventDefault()
     setLoading(true)
     setMessage('')
+    const supabase = getSupabaseBrowserClient()
 
     const result = mode === 'sign-in'
       ? await supabase.auth.signInWithPassword({ email, password })
@@ -55,6 +53,7 @@ export default function AuthPage() {
 
   async function googleSignIn() {
     setLoading(true)
+    const supabase = getSupabaseBrowserClient()
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/auth/callback` } })
     if (error) {
       setMessage(error.message)
