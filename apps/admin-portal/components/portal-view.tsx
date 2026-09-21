@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BarChart3,
@@ -115,10 +115,40 @@ export default function PortalView({ requiredRole }: { requiredRole: Role }) {
   const [mobileNav, setMobileNav] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const viewRef = useRef<View>("dashboard");
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
 
   useEffect(() => {
     void load();
   }, [requiredRole]);
+
+  useEffect(() => {
+    const currentState = { portal: true, view: "dashboard" as View };
+    window.history.replaceState(currentState, "", window.location.href);
+    window.history.pushState(currentState, "", window.location.href);
+
+    function restoreView(event: PopStateEvent) {
+      if (event.state?.portal) {
+        setView(event.state.view ?? "dashboard");
+        setSearch("");
+        return;
+      }
+
+      window.history.pushState(
+        { portal: true, view: viewRef.current },
+        "",
+        window.location.href,
+      );
+      setView("dashboard");
+      setSearch("");
+    }
+
+    window.addEventListener("popstate", restoreView);
+    return () => window.removeEventListener("popstate", restoreView);
+  }, []);
 
   async function load() {
     const supabase = getSupabaseBrowserClient();
@@ -199,9 +229,15 @@ export default function PortalView({ requiredRole }: { requiredRole: Role }) {
     router.replace("/");
   }
   function navigate(nextView: View) {
+    viewRef.current = nextView;
     setView(nextView);
     setSearch("");
     setMobileNav(false);
+    window.history.pushState(
+      { portal: true, view: nextView },
+      "",
+      window.location.href,
+    );
   }
 
   const totalSavings = accounts.reduce(
@@ -449,6 +485,7 @@ export default function PortalView({ requiredRole }: { requiredRole: Role }) {
               rows={filteredMembers}
               search={search}
               setSearch={setSearch}
+              onChanged={() => void load()}
             />
           )}
           {view === "records" && (
@@ -1021,10 +1058,12 @@ function Members({
   rows,
   search,
   setSearch,
+  onChanged,
 }: {
   rows: Member[];
   search: string;
   setSearch: (value: string) => void;
+  onChanged: () => void;
 }) {
   const [selected, setSelected] = useState<Member | null>(null);
   const [fullName, setFullName] = useState("");
@@ -1033,6 +1072,9 @@ function Members({
   const [memberNumber, setMemberNumber] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   function editMember(member: Member) {
     setSelected(member);
@@ -1065,6 +1107,30 @@ function Members({
 
     setMessage("Member profile updated.");
     setSaving(false);
+    onChanged();
+  }
+
+  async function deleteMember() {
+    if (!deleteTarget || deleteConfirmation !== "DELETE") return;
+    setDeleting(true);
+    setMessage("");
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.rpc("admin_delete_member", {
+      p_user_id: deleteTarget.id,
+    });
+
+    if (error) {
+      setMessage(error.message);
+      setDeleting(false);
+      return;
+    }
+
+    setDeleteTarget(null);
+    setDeleteConfirmation("");
+    setSelected(null);
+    setMessage("Member deleted.");
+    setDeleting(false);
+    onChanged();
   }
 
   return (
@@ -1090,7 +1156,7 @@ function Members({
           <label>WhatsApp number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} required /></label>
           <label>Member number<input value={memberNumber} onChange={(event) => setMemberNumber(event.target.value.toUpperCase())} required /></label>
           {message && <p className={message.startsWith("Member profile") ? "success-message" : "error"}>{message}</p>}
-          <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save member"}</button>
+          <div className="dossier-actions"><button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save member"}</button><button className="danger-button" type="button" onClick={() => setDeleteTarget(selected)}>Delete member</button></div>
         </form>
       </section>}
       <section className="surface">
@@ -1099,13 +1165,9 @@ function Members({
           setSearch={setSearch}
           placeholder="Search members"
         />
-        <DataTable
-          headers={["Member", "Member number", "Email", "Role"]}
-          rows={rows.map((member) => [`${initials(member.full_name)}  ${member.full_name}`, member.member_number, member.email, member.role])}
-          empty="No members found"
-        />
-        <div className="member-actions-list">{rows.map((member) => <button className="member-edit-button" key={member.id} onClick={() => editMember(member)}>Edit {member.full_name}</button>)}</div>
+        <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Member</th><th>Member number</th><th>Email</th><th>Role</th></tr></thead><tbody>{rows.map((member) => <tr key={member.id}><td><button className="member-name-button" onClick={() => editMember(member)}><span className="avatar">{initials(member.full_name)}</span><strong>{member.full_name}</strong></button></td><td>{member.member_number}</td><td>{member.email}</td><td><strong>{member.role}</strong></td></tr>)}</tbody></table>{!rows.length && <Empty icon={<Search />} title="No members found" text="Try adjusting your search or check back after records are added." />}</div>
       </section>
+      {deleteTarget && <div className="modal-backdrop"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-member-title"><button className="icon-button" type="button" onClick={() => setDeleteTarget(null)} aria-label="Close delete confirmation"><X size={17} /></button><p className="eyebrow">Permanent action</p><h3 id="delete-member-title">Delete {deleteTarget.full_name}?</h3><p className="muted">This removes the member account and linked financial records. Type <strong>DELETE</strong> to confirm.</p><input value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} placeholder="Type DELETE" autoFocus /><div className="dialog-actions"><button className="secondary-button" type="button" onClick={() => setDeleteTarget(null)}>Cancel</button><button className="danger-button" type="button" disabled={deleteConfirmation !== "DELETE" || deleting} onClick={() => void deleteMember()}>{deleting ? "Deleting..." : "Delete member"}</button></div></section></div>}
     </div>
   );
 }
@@ -1122,6 +1184,7 @@ function AdminRecords({
 }) {
   const [memberId, setMemberId] = useState(members[0]?.id ?? "");
   const [accountType, setAccountType] = useState("Savings");
+  const [recordKind, setRecordKind] = useState<"opening" | "activity">("activity");
   const [transactionType, setTransactionType] = useState("Credit");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -1139,9 +1202,9 @@ function AdminRecords({
     const { error } = await supabase.rpc("record_admin_transaction", {
       p_user_id: memberId,
       p_account_type: accountType,
-      p_transaction_type: transactionType,
+      p_transaction_type: recordKind === "opening" ? "Credit" : transactionType,
       p_amount: Number(amount),
-      p_description: description,
+      p_description: recordKind === "opening" ? "Opening balance" : description,
       p_transaction_date: transactionDate,
     });
     if (error) {
@@ -1198,6 +1261,13 @@ function AdminRecords({
           </label>
           <div className="form-row three">
             <label>
+              Record type
+              <select value={recordKind} onChange={(event) => setRecordKind(event.target.value as "opening" | "activity")}>
+                <option value="activity">New savings entry</option>
+                <option value="opening">Existing balance</option>
+              </select>
+            </label>
+            <label>
               Account type
               <select
                 value={accountType}
@@ -1208,7 +1278,7 @@ function AdminRecords({
                 <option>Special Savings</option>
               </select>
             </label>
-            <label>
+            {recordKind === "activity" && <label>
               Entry type
               <select
                 value={transactionType}
@@ -1217,7 +1287,7 @@ function AdminRecords({
                 <option>Credit</option>
                 <option>Debit</option>
               </select>
-            </label>
+            </label>}
             <label>
               Amount
               <input
@@ -1237,8 +1307,9 @@ function AdminRecords({
               <input
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="Monthly contribution"
-                required
+                placeholder={recordKind === "opening" ? "Opening balance" : "Monthly contribution"}
+                required={recordKind === "activity"}
+                disabled={recordKind === "opening"}
               />
             </label>
             <label>

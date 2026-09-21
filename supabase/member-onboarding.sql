@@ -159,6 +159,32 @@ $$;
 
 grant execute on function public.admin_update_member_profile(uuid, text, text, text, text) to authenticated;
 
+create or replace function public.admin_delete_member(
+  p_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles
+    where id = p_user_id and role = 'member'
+  ) then
+    raise exception 'Member was not found';
+  end if;
+
+  delete from auth.users where id = p_user_id;
+end;
+$$;
+
+grant execute on function public.admin_delete_member(uuid) to authenticated;
+
 create or replace function public.record_admin_transaction(
   p_user_id uuid,
   p_account_type text,

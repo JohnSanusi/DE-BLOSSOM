@@ -1001,19 +1001,16 @@ button:disabled {
 .admin-edit-panel {
   max-width: 760px;
 }
-.member-actions-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid #edf2ee;
-}
-.member-edit-button {
-  background: var(--green-soft);
-  color: var(--green-dark);
-  font-size: 11px;
-}
+.dossier-actions, .dialog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.member-name-button { display: inline-flex; align-items: center; gap: 9px; padding: 4px 0; background: transparent; color: var(--ink); }
+.member-name-button:hover { background: transparent; color: var(--green); }
+.danger-button { background: #a33b32; color: white; }
+.danger-button:hover:not(:disabled) { background: #842e27; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgba(16, 35, 25, .42); }
+.confirm-dialog { position: relative; width: min(430px, 100%); display: grid; gap: 14px; padding: 26px; border: 1px solid var(--line); border-radius: 15px; background: white; box-shadow: 0 24px 70px rgba(16, 35, 25, .2); }
+.confirm-dialog > .icon-button { position: absolute; top: 13px; right: 13px; }
+.confirm-dialog h3 { margin: 0; font: 600 21px Arial, sans-serif; }
+.confirm-dialog p { margin: 0; }
 .profile-details {
   grid-column: 1 / -1;
   margin-top: 17px;
@@ -1181,6 +1178,10 @@ button:disabled {
     align-items: flex-start;
     gap: 15px;
   }
+  .profile-card { grid-template-columns: 1fr; }
+  .profile-card .avatar.large { margin-bottom: 3px; }
+  .dossier-actions, .dialog-actions { align-items: stretch; flex-direction: column; }
+  .dossier-actions button, .dialog-actions button { width: 100%; }
 }
 @media print {
   .workspace-nav,
