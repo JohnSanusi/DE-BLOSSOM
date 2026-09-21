@@ -1,4 +1,4 @@
-# Kano Cooperative Society Portal
+# De blossom Cooperative Society Portal
 
 A member and administrator financial portal for tracking cooperative savings, shares, special savings, loans, repayments, statements, and repayment evidence.
 
