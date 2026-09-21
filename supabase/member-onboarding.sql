@@ -31,6 +31,15 @@ begin
     raise exception 'All member profile fields are required';
   end if;
 
+  if exists (
+    select 1 from public.profiles
+    where id = auth.uid()
+      and username is not null
+      and upper(member_number) <> upper(trim(p_member_number))
+  ) then
+    raise exception 'Member number cannot be changed after profile setup';
+  end if;
+
   update public.profiles
   set full_name = trim(p_full_name),
       username = lower(trim(p_username)),
@@ -52,6 +61,103 @@ end;
 $$;
 
 grant execute on function public.complete_member_profile(text, text, text, text) to authenticated;
+
+create or replace function public.update_member_profile(
+  p_full_name text,
+  p_username text,
+  p_phone text
+)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_profile public.profiles;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if nullif(trim(p_full_name), '') is null
+    or nullif(trim(p_username), '') is null
+    or nullif(trim(p_phone), '') is null then
+    raise exception 'Name, username, and WhatsApp number are required';
+  end if;
+
+  update public.profiles
+  set full_name = trim(p_full_name),
+      username = lower(trim(p_username)),
+      phone = trim(p_phone)
+  where id = auth.uid()
+    and role = 'member'
+  returning * into updated_profile;
+
+  if updated_profile.id is null then
+    raise exception 'Member profile was not found';
+  end if;
+
+  return updated_profile;
+exception
+  when unique_violation then
+    raise exception 'That username is already in use';
+end;
+$$;
+
+grant execute on function public.update_member_profile(text, text, text) to authenticated;
+
+create or replace function public.admin_update_member_profile(
+  p_user_id uuid,
+  p_full_name text,
+  p_username text,
+  p_phone text,
+  p_member_number text
+)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_profile public.profiles;
+begin
+  if not public.is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  update public.profiles
+  set full_name = trim(p_full_name),
+      username = lower(trim(p_username)),
+      phone = trim(p_phone),
+      member_number = upper(trim(p_member_number))
+  where id = p_user_id
+    and role = 'member'
+  returning * into updated_profile;
+
+  if updated_profile.id is null then
+    raise exception 'Member profile was not found';
+  end if;
+
+  update public.transactions
+  set member_number = updated_profile.member_number
+  where user_id = updated_profile.id;
+
+  update public.loan_payments
+  set member_number = updated_profile.member_number
+  where user_id = updated_profile.id;
+
+  update public.loans
+  set member_number = updated_profile.member_number
+  where user_id = updated_profile.id;
+
+  return updated_profile;
+exception
+  when unique_violation then
+    raise exception 'That username or member number is already in use';
+end;
+$$;
+
+grant execute on function public.admin_update_member_profile(uuid, text, text, text, text) to authenticated;
 
 create or replace function public.record_admin_transaction(
   p_user_id uuid,
