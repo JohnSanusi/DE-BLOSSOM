@@ -25,5 +25,16 @@ export async function GET(request: Request) {
   const { error } = await supabase.auth.exchangeCodeForSession(code)
   if (error) return NextResponse.redirect(new URL(`/?error=${encodeURIComponent(error.message)}`, requestUrl.origin))
 
-  return NextResponse.redirect(new URL('/', requestUrl.origin))
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profile } = user
+    ? await supabase.from('profiles').select('role, username').eq('id', user.id).maybeSingle()
+    : { data: null }
+
+  const destination = profile?.role === 'admin'
+    ? '/admin'
+    : profile?.username
+      ? '/member'
+      : '/onboarding'
+
+  return NextResponse.redirect(new URL(destination, requestUrl.origin))
 }

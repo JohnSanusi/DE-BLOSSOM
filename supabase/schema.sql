@@ -3,6 +3,7 @@ create table if not exists public.profiles (
   full_name text not null,
   email text not null,
   phone text,
+  username text,
   member_number text unique not null,
   role text not null default 'member' check (role in ('member', 'admin')),
   created_at timestamptz not null default now()

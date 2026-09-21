@@ -22,8 +22,12 @@ export default function AuthPage() {
 
   async function redirectByRole(userId: string) {
     const supabase = getSupabaseBrowserClient()
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle()
-    window.location.replace(profile?.role === 'admin' ? '/admin' : '/member')
+    const { data: profile } = await supabase.from('profiles').select('role, username').eq('id', userId).maybeSingle()
+    if (profile?.role === 'admin') {
+      window.location.replace('/admin')
+      return
+    }
+    window.location.replace(profile?.username ? '/member' : '/onboarding')
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
