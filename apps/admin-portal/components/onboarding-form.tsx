@@ -21,6 +21,7 @@ export default function OnboardingForm() {
   }, []);
 
   async function loadUser() {
+    const startedAt = Date.now();
     const supabase = getSupabaseBrowserClient();
     const {
       data: { user },
@@ -46,6 +47,7 @@ export default function OnboardingForm() {
     setUsername(profile?.username ?? "");
     setPhone(profile?.phone ?? "");
     setMemberNumber(profile?.member_number ?? "");
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, 900 - (Date.now() - startedAt))));
     setLoading(false);
   }
 

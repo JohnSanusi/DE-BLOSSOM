@@ -152,6 +152,7 @@ export default function PortalView({ requiredRole }: { requiredRole: Role }) {
   }, []);
 
   async function load() {
+    const startedAt = Date.now();
     const supabase = getSupabaseBrowserClient();
     const {
       data: { user },
@@ -221,6 +222,7 @@ export default function PortalView({ requiredRole }: { requiredRole: Role }) {
     setTransactions((transactionRows ?? []) as Transaction[]);
     setLoans((loanRows ?? []) as Loan[]);
     setMembers((memberRows ?? []) as Member[]);
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, 900 - (Date.now() - startedAt))));
     setLoading(false);
   }
 

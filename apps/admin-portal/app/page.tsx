@@ -17,6 +17,8 @@ export default function AuthPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const passwordsEntered = mode === "sign-up" && password.length > 0 && confirmPassword.length > 0;
+  const passwordsMatch = passwordsEntered && password === confirmPassword;
 
   useEffect(() => {
     void redirectExistingSession();
@@ -172,6 +174,7 @@ export default function AuthPage() {
               Password
               <div className="password-field">
                 <input
+                  className={passwordsEntered ? (passwordsMatch ? "password-match" : "password-mismatch") : ""}
                   type={showPassword ? "text" : "password"}
                   minLength={6}
                   value={password}
@@ -189,8 +192,8 @@ export default function AuthPage() {
               </div>
             </label>
             {mode === "sign-up" && <>
+              <label>Confirm password<div className="password-field"><input className={passwordsEntered ? (passwordsMatch ? "password-match" : "password-mismatch") : ""} type={showConfirmPassword ? "text" : "password"} minLength={6} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /><button className="password-toggle" type="button" aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"} onClick={() => setShowConfirmPassword(!showConfirmPassword)}>{showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>{passwordsEntered && <span className={passwordsMatch ? "password-feedback match" : "password-feedback mismatch"}>{passwordsMatch ? "Passwords match" : "Passwords do not match"}</span>}</label>
               <div className="signup-fields-heading"><span>Member details</span><small>These appear on your dashboard</small></div>
-              <label>Confirm password<div className="password-field"><input type={showConfirmPassword ? "text" : "password"} minLength={6} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /><button className="password-toggle" type="button" aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"} onClick={() => setShowConfirmPassword(!showConfirmPassword)}>{showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
               <label>Full name<input value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
               <label>Username<input value={username} onChange={(event) => setUsername(event.target.value.replace(/\s/g, "").toLowerCase())} placeholder="e.g. amina.yusuf" required /></label>
               <label>WhatsApp number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="e.g. +234 803 000 0000" required /></label>
