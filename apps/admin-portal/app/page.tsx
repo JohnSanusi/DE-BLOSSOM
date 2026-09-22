@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Eye, EyeOff, LockKeyhole } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { getSupabaseBrowserClient } from "../lib/supabase-browser";
 
 export default function AuthPage() {
@@ -86,22 +86,8 @@ export default function AuthPage() {
   return (
     <main className="page auth-page">
       <section className="auth-layout">
-        <div className="intro auth-intro">
-          <div className="auth-brand"><span className="mark">D</span><span>De-Blossom</span></div>
-          <p className="kicker">De-Blossom Cooperative Society</p>
-          <h1>Your cooperative records, made simple.</h1>
-          <p className="intro-copy">
-            Create an account or sign in to view your savings, shares, loans,
-            and repayments.
-          </p>
-          <div className="auth-highlights"><div><span>01</span><p>See every contribution and balance in one place.</p></div><div><span>02</span><p>Follow loans, repayments, and statements with clarity.</p></div></div>
-          <div className="trust-note">
-            <LockKeyhole size={16} />
-            <span>Secure member access</span>
-          </div>
-        </div>
         <div className="panel form auth-card">
-          <div className="mobile-auth-brand"><span className="mark small">D</span><strong>De-Blossom</strong></div>
+          <div className="auth-card-brand"><span className="mark">D</span><div><strong>De-Blossom</strong><span>Cooperative Society</span></div></div>
           <div
             className="auth-switch"
             role="tablist"
@@ -193,7 +179,7 @@ export default function AuthPage() {
             onClick={googleSignIn}
             disabled={loading}
           >
-            <span className="google-glyph">G</span>Continue with Google
+            <svg className="google-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.35 12.27c0-.72-.06-1.42-.18-2.09H12v3.96h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.26Z"/><path fill="#34A853" d="M12 21.72c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.55 0-4.71-1.72-5.49-4.03H3.27v2.53A9.74 9.74 0 0 0 12 21.72Z"/><path fill="#FBBC05" d="M6.51 13.8a5.85 5.85 0 0 1 0-3.6V7.67H3.27a9.77 9.77 0 0 0 0 8.66l3.24-2.53Z"/><path fill="#EA4335" d="M12 6.17c1.43 0 2.71.49 3.72 1.46l2.79-2.79C16.84 3.27 14.63 2.28 12 2.28a9.74 9.74 0 0 0-8.73 5.39l3.24 2.53C7.29 7.89 9.45 6.17 12 6.17Z"/></svg>Continue with Google
           </button>
           <p className="auth-footer">By continuing, you agree to use De-Blossom for cooperative records only.</p>
         </div>
