@@ -84,22 +84,24 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="page">
+    <main className="page auth-page">
       <section className="auth-layout">
-        <div className="intro">
-          <span className="mark">D</span>
+        <div className="intro auth-intro">
+          <div className="auth-brand"><span className="mark">D</span><span>De-Blossom</span></div>
           <p className="kicker">De-Blossom Cooperative Society</p>
           <h1>Your cooperative records, made simple.</h1>
           <p className="intro-copy">
             Create an account or sign in to view your savings, shares, loans,
             and repayments.
           </p>
+          <div className="auth-highlights"><div><span>01</span><p>See every contribution and balance in one place.</p></div><div><span>02</span><p>Follow loans, repayments, and statements with clarity.</p></div></div>
           <div className="trust-note">
             <LockKeyhole size={16} />
-            <span>Secure access powered by Supabase</span>
+            <span>Secure member access</span>
           </div>
         </div>
-        <div className="panel form">
+        <div className="panel form auth-card">
+          <div className="mobile-auth-brand"><span className="mark small">D</span><strong>De-Blossom</strong></div>
           <div
             className="auth-switch"
             role="tablist"
@@ -130,7 +132,7 @@ export default function AuthPage() {
               Create account
             </button>
           </div>
-          <p className="kicker">
+          <div className="auth-form-heading"><p className="kicker">
             {mode === "sign-in" ? "Welcome back" : "Join De-Blossom"}
           </p>
           <h2>
@@ -142,7 +144,7 @@ export default function AuthPage() {
             {mode === "sign-in"
               ? "Enter your details to continue."
               : "Your new account starts with member access."}
-          </p>
+              </p></div>
           <form onSubmit={submit}>
             <label>
               Email
@@ -191,8 +193,9 @@ export default function AuthPage() {
             onClick={googleSignIn}
             disabled={loading}
           >
-            Continue with Google
+            <span className="google-glyph">G</span>Continue with Google
           </button>
+          <p className="auth-footer">By continuing, you agree to use De-Blossom for cooperative records only.</p>
         </div>
       </section>
     </main>
