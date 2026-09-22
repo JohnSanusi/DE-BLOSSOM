@@ -1196,14 +1196,25 @@ function AdminRecords({
     setSaving(true);
     setMessage("");
     const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase.rpc("record_admin_transaction", {
+    const commonPayload = {
       p_user_id: memberId,
       p_account_type: accountType,
-      p_transaction_type: recordKind === "opening" ? "Credit" : transactionType,
       p_amount: Number(amount),
-      p_description: recordKind === "opening" ? "Opening balance" : description,
-      p_transaction_date: transactionDate,
-    });
+      p_effective_date: transactionDate,
+    };
+    const { error } = recordKind === "opening"
+      ? await supabase.rpc("set_member_opening_balance", {
+          ...commonPayload,
+          p_override: true,
+        })
+      : await supabase.rpc("record_admin_transaction", {
+          p_user_id: memberId,
+          p_account_type: accountType,
+          p_transaction_type: transactionType,
+          p_amount: Number(amount),
+          p_description: description,
+          p_transaction_date: transactionDate,
+        });
     if (error) {
       setMessage(error.message);
       setSaving(false);
@@ -1211,7 +1222,11 @@ function AdminRecords({
     }
     setAmount("");
     setDescription("");
-    setMessage("Record saved and linked to the selected member.");
+    setMessage(
+      recordKind === "opening"
+        ? "Opening balance saved and linked to the member account."
+        : "Record saved and linked to the selected member.",
+    );
     setSaving(false);
     onSaved();
   }

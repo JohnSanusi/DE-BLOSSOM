@@ -185,6 +185,98 @@ $$;
 
 grant execute on function public.admin_delete_member(uuid) to authenticated;
 
+create or replace function public.set_member_opening_balance(
+  p_user_id uuid,
+  p_account_type text,
+  p_amount numeric,
+  p_effective_date date,
+  p_override boolean default false
+)
+returns public.transactions
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_profile public.profiles;
+  saved_transaction public.transactions;
+  existing_opening public.transactions;
+begin
+  if not public.is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  if p_amount is null or p_amount < 0 then
+    raise exception 'Opening balance cannot be negative';
+  end if;
+
+  if p_account_type not in ('Savings', 'Shares', 'Special Savings') then
+    raise exception 'Invalid account type';
+  end if;
+
+  select * into target_profile
+  from public.profiles
+  where id = p_user_id and role = 'member';
+
+  if target_profile.id is null then
+    raise exception 'Member was not found';
+  end if;
+
+  insert into public.savings_accounts (user_id, account_type, balance)
+  values (target_profile.id, p_account_type, 0)
+  on conflict (user_id, account_type) do nothing;
+
+  select * into existing_opening
+  from public.transactions
+  where user_id = target_profile.id
+    and account_type = p_account_type
+    and lower(description) = 'opening balance'
+  order by transaction_date asc, created_at asc
+  limit 1;
+
+  if existing_opening.id is not null and p_override is false then
+    raise exception 'Opening balance already exists for this account. Use the edit flow to update it.';
+  end if;
+
+  if existing_opening.id is not null then
+    update public.transactions
+    set amount = p_amount,
+        transaction_date = p_effective_date,
+        description = 'Opening balance',
+        updated_at = now()
+    where id = existing_opening.id;
+
+    update public.savings_accounts
+    set balance = p_amount
+    where user_id = target_profile.id and account_type = p_account_type;
+
+    select * into saved_transaction
+    from public.transactions
+    where id = existing_opening.id;
+
+    return saved_transaction;
+  end if;
+
+  insert into public.transactions (
+    user_id, member_number, account_type, transaction_type, amount,
+    description, transaction_date, created_by
+  )
+  values (
+    target_profile.id, target_profile.member_number, p_account_type,
+    'Credit', p_amount, 'Opening balance', p_effective_date, auth.uid()
+  )
+  returning * into saved_transaction;
+
+  update public.savings_accounts
+  set balance = p_amount
+  where user_id = target_profile.id and account_type = p_account_type;
+
+  return saved_transaction;
+end;
+$$;
+
+grant execute on function public.set_member_opening_balance(uuid, text, numeric, date, boolean) to authenticated;
+
 create or replace function public.record_admin_transaction(
   p_user_id uuid,
   p_account_type text,
