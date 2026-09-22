@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "../lib/supabase-browser";
+import LoadingScreen from "./loading-screen";
 
 export default function OnboardingForm() {
   const router = useRouter();
@@ -74,13 +75,7 @@ export default function OnboardingForm() {
     router.replace("/member");
   }
 
-  if (loading)
-    return (
-      <main className="workspace-loading">
-        <div className="loading-mark">D</div>
-        <p>Preparing your member profile...</p>
-      </main>
-    );
+  if (loading) return <LoadingScreen label="Preparing your member profile" />;
 
   return (
     <main className="page">

@@ -8,7 +8,13 @@ export default function AuthPage() {
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
+  const [phone, setPhone] = useState("");
+  const [memberNumber, setMemberNumber] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -42,6 +48,11 @@ export default function AuthPage() {
     event.preventDefault();
     setLoading(true);
     setMessage("");
+    if (mode === "sign-up" && password !== confirmPassword) {
+      setMessage("Passwords do not match.");
+      setLoading(false);
+      return;
+    }
     const supabase = getSupabaseBrowserClient();
 
     const result =
@@ -50,7 +61,15 @@ export default function AuthPage() {
         : await supabase.auth.signUp({
             email,
             password,
-            options: { emailRedirectTo: `${window.location.origin}/` },
+            options: {
+              emailRedirectTo: `${window.location.origin}/`,
+              data: {
+                full_name: fullName,
+                username,
+                phone,
+                member_number: memberNumber,
+              },
+            },
           });
 
     if (result.error) {
@@ -87,7 +106,13 @@ export default function AuthPage() {
     <main className="page auth-page">
       <section className="auth-layout">
         <div className="panel form auth-card">
-          <div className="auth-card-brand"><span className="mark">D</span><div><strong>De-Blossom</strong><span>Cooperative Society</span></div></div>
+          <div className="auth-card-brand">
+            <span className="mark">D</span>
+            <div>
+              <strong>De-Blossom</strong>
+              <span>Cooperative Society</span>
+            </div>
+          </div>
           <div
             className="auth-switch"
             role="tablist"
@@ -118,19 +143,21 @@ export default function AuthPage() {
               Create account
             </button>
           </div>
-          <div className="auth-form-heading"><p className="kicker">
-            {mode === "sign-in" ? "Welcome back" : "Join De-Blossom"}
-          </p>
-          <h2>
-            {mode === "sign-in"
-              ? "Sign in to your account"
-              : "Create your account"}
-          </h2>
-          <p className="muted">
-            {mode === "sign-in"
-              ? "Enter your details to continue."
-              : "Your new account starts with member access."}
-              </p></div>
+          <div className="auth-form-heading">
+            <p className="kicker">
+              {mode === "sign-in" ? "Welcome back" : "Join De-Blossom"}
+            </p>
+            <h2>
+              {mode === "sign-in"
+                ? "Sign in to your account"
+                : "Create your account"}
+            </h2>
+            <p className="muted">
+              {mode === "sign-in"
+                ? "Enter your details to continue."
+                : "Set up your member details to get started."}
+            </p>
+          </div>
           <form onSubmit={submit}>
             <label>
               Email
@@ -161,6 +188,14 @@ export default function AuthPage() {
                 </button>
               </div>
             </label>
+            {mode === "sign-up" && <>
+              <div className="signup-fields-heading"><span>Member details</span><small>These appear on your dashboard</small></div>
+              <label>Confirm password<div className="password-field"><input type={showConfirmPassword ? "text" : "password"} minLength={6} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /><button className="password-toggle" type="button" aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"} onClick={() => setShowConfirmPassword(!showConfirmPassword)}>{showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
+              <label>Full name<input value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
+              <label>Username<input value={username} onChange={(event) => setUsername(event.target.value.replace(/\s/g, "").toLowerCase())} placeholder="e.g. amina.yusuf" required /></label>
+              <label>WhatsApp number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="e.g. +234 803 000 0000" required /></label>
+              <label>Member ID / number<input value={memberNumber} onChange={(event) => setMemberNumber(event.target.value.toUpperCase())} placeholder="e.g. DB-001" required /><span className="field-help">Use the number assigned by De-Blossom.</span></label>
+            </>}
             {message && <p className="error">{message}</p>}
             <button className="primary-action" type="submit" disabled={loading}>
               {loading
@@ -179,9 +214,30 @@ export default function AuthPage() {
             onClick={googleSignIn}
             disabled={loading}
           >
-            <svg className="google-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.35 12.27c0-.72-.06-1.42-.18-2.09H12v3.96h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.26Z"/><path fill="#34A853" d="M12 21.72c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.55 0-4.71-1.72-5.49-4.03H3.27v2.53A9.74 9.74 0 0 0 12 21.72Z"/><path fill="#FBBC05" d="M6.51 13.8a5.85 5.85 0 0 1 0-3.6V7.67H3.27a9.77 9.77 0 0 0 0 8.66l3.24-2.53Z"/><path fill="#EA4335" d="M12 6.17c1.43 0 2.71.49 3.72 1.46l2.79-2.79C16.84 3.27 14.63 2.28 12 2.28a9.74 9.74 0 0 0-8.73 5.39l3.24 2.53C7.29 7.89 9.45 6.17 12 6.17Z"/></svg>Continue with Google
+            <svg className="google-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="#4285F4"
+                d="M21.35 12.27c0-.72-.06-1.42-.18-2.09H12v3.96h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.26Z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 21.72c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.55 0-4.71-1.72-5.49-4.03H3.27v2.53A9.74 9.74 0 0 0 12 21.72Z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M6.51 13.8a5.85 5.85 0 0 1 0-3.6V7.67H3.27a9.77 9.77 0 0 0 0 8.66l3.24-2.53Z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 6.17c1.43 0 2.71.49 3.72 1.46l2.79-2.79C16.84 3.27 14.63 2.28 12 2.28a9.74 9.74 0 0 0-8.73 5.39l3.24 2.53C7.29 7.89 9.45 6.17 12 6.17Z"
+              />
+            </svg>
+            Continue with Google
           </button>
-          <p className="auth-footer">By continuing, you agree to use De-Blossom for cooperative records only.</p>
+          <p className="auth-footer">
+            By continuing, you agree to use De-Blossom for cooperative records
+            only.
+          </p>
         </div>
       </section>
     </main>

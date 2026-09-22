@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { getSupabaseBrowserClient } from "../lib/supabase-browser";
+import LoadingScreen from "./loading-screen";
 
 type Role = "member" | "admin";
 type View =
@@ -271,13 +272,7 @@ export default function PortalView({ requiredRole }: { requiredRole: Role }) {
     [members, search],
   );
 
-  if (loading)
-    return (
-      <main className="workspace-loading">
-        <div className="loading-mark">D</div>
-        <p>Loading your De-Blossom workspace...</p>
-      </main>
-    );
+  if (loading) return <LoadingScreen label="Loading your workspace" />;
   if (error)
     return (
       <main className="workspace-loading">

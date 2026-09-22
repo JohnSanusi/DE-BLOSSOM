@@ -20,10 +20,15 @@ begin
       split_part(coalesce(new.email, 'member'), '@', 1)
     ),
     coalesce(new.email, ''),
-    generated_member_number,
+    coalesce(nullif(new.raw_user_meta_data ->> 'member_number', ''), generated_member_number),
     'member'
   )
   on conflict (id) do nothing;
+
+  update public.profiles
+  set username = nullif(lower(new.raw_user_meta_data ->> 'username'), ''),
+      phone = nullif(new.raw_user_meta_data ->> 'phone', '')
+  where id = new.id;
 
   return new;
 end;
