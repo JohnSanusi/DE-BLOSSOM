@@ -47,7 +47,9 @@ export default function OnboardingForm() {
     setUsername(profile?.username ?? "");
     setPhone(profile?.phone ?? "");
     setMemberNumber(profile?.member_number ?? "");
-    await new Promise((resolve) => setTimeout(resolve, Math.max(0, 900 - (Date.now() - startedAt))));
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.max(0, 900 - (Date.now() - startedAt))),
+    );
     setLoading(false);
   }
 

@@ -202,7 +202,9 @@ export default function PortalView({ requiredRole }: { requiredRole: Role }) {
       requiredRole === "admin"
         ? supabase
             .from("profiles")
-            .select("id, full_name, email, username, member_number, role, phone")
+            .select(
+              "id, full_name, email, username, member_number, role, phone",
+            )
             .order("member_number")
         : Promise.resolve({ data: [] as Member[] });
     const [
@@ -222,7 +224,9 @@ export default function PortalView({ requiredRole }: { requiredRole: Role }) {
     setTransactions((transactionRows ?? []) as Transaction[]);
     setLoans((loanRows ?? []) as Loan[]);
     setMembers((memberRows ?? []) as Member[]);
-    await new Promise((resolve) => setTimeout(resolve, Math.max(0, 900 - (Date.now() - startedAt))));
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.max(0, 900 - (Date.now() - startedAt))),
+    );
     setLoading(false);
   }
 
@@ -1145,26 +1149,200 @@ function Members({
           Bulk upload
         </button>
       </div>
-      {selected && <section className="surface admin-edit-panel">
-        <div className="section-head"><div><h3>Edit member profile</h3><p>Member number changes also update linked financial records.</p></div><button className="icon-button" type="button" onClick={() => setSelected(null)} aria-label="Close member editor"><X size={17} /></button></div>
-        <form className="admin-member-form" onSubmit={saveMember}>
-          <label>Full name<input value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
-          <label>Username<input value={username} onChange={(event) => setUsername(event.target.value.replace(/\s/g, "").toLowerCase())} required /></label>
-          <label>WhatsApp number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} required /></label>
-          <label>Member number<input value={memberNumber} onChange={(event) => setMemberNumber(event.target.value.toUpperCase())} required /></label>
-          {message && <p className={message.startsWith("Member profile") ? "success-message" : "error"}>{message}</p>}
-          <div className="dossier-actions"><button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save member"}</button><button className="danger-button" type="button" onClick={() => setDeleteTarget(selected)}>Delete member</button></div>
-        </form>
-      </section>}
+      {selected && (
+        <section className="surface admin-edit-panel">
+          <div className="section-head">
+            <div>
+              <h3>Edit member profile</h3>
+              <p>Member number changes also update linked financial records.</p>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setSelected(null)}
+              aria-label="Close member editor"
+            >
+              <X size={17} />
+            </button>
+          </div>
+          <form className="admin-member-form" onSubmit={saveMember}>
+            <label>
+              Full name
+              <input
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Username
+              <input
+                value={username}
+                onChange={(event) =>
+                  setUsername(
+                    event.target.value.replace(/\s/g, "").toLowerCase(),
+                  )
+                }
+                required
+              />
+            </label>
+            <label>
+              WhatsApp number
+              <input
+                type="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Member number
+              <input
+                value={memberNumber}
+                onChange={(event) =>
+                  setMemberNumber(event.target.value.toUpperCase())
+                }
+                required
+              />
+            </label>
+            {message && (
+              <p
+                className={
+                  message.startsWith("Member profile")
+                    ? "success-message"
+                    : "error"
+                }
+              >
+                {message}
+              </p>
+            )}
+            <div className="dossier-actions">
+              <button
+                className="primary-button"
+                type="submit"
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save member"}
+              </button>
+              <button
+                className="danger-button"
+                type="button"
+                onClick={() => setDeleteTarget(selected)}
+              >
+                Delete member
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
       <section className="surface">
         <Toolbar
           search={search}
           setSearch={setSearch}
           placeholder="Search members"
         />
-        <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Member</th><th>Member number</th><th>Email</th><th>Role</th></tr></thead><tbody>{rows.map((member) => <tr key={member.id}><td><button className="member-name-button" onClick={() => editMember(member)}><span className="avatar">{initials(member.full_name)}</span><strong>{member.full_name}</strong></button></td><td>{member.member_number}</td><td>{member.email}</td><td><strong>{member.role}</strong></td></tr>)}</tbody></table>{!rows.length && <Empty icon={<Search />} title="No members found" text="Try adjusting your search or check back after records are added." />}</div>
+        <div className="data-table-wrap">
+          <table className="data-table member-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Member number</th>
+                <th>Email</th>
+                <th>Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((member) => (
+                <tr
+                  key={member.id}
+                  className={`member-row ${selected?.id === member.id ? "selected-row" : ""}`}
+                  onClick={() => editMember(member)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      editMember(member);
+                    }
+                  }}
+                  title="Click to view and edit member dossier"
+                >
+                  <td>
+                    <div className="member-name-cell">
+                      <span className="avatar">
+                        {initials(member.full_name)}
+                      </span>
+                      <strong>{member.full_name}</strong>
+                    </div>
+                  </td>
+                  <td>{member.member_number}</td>
+                  <td>{member.email}</td>
+                  <td>
+                    <span className={`role-pill ${member.role}`}>
+                      {member.role}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!rows.length && (
+            <Empty
+              icon={<Search />}
+              title="No members found"
+              text="Try adjusting your search or check back after records are added."
+            />
+          )}
+        </div>
       </section>
-      {deleteTarget && <div className="modal-backdrop"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-member-title"><button className="icon-button" type="button" onClick={() => setDeleteTarget(null)} aria-label="Close delete confirmation"><X size={17} /></button><p className="eyebrow">Permanent action</p><h3 id="delete-member-title">Delete {deleteTarget.full_name}?</h3><p className="muted">This removes the member account and linked financial records. Type <strong>DELETE</strong> to confirm.</p><input value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} placeholder="Type DELETE" autoFocus /><div className="dialog-actions"><button className="secondary-button" type="button" onClick={() => setDeleteTarget(null)}>Cancel</button><button className="danger-button" type="button" disabled={deleteConfirmation !== "DELETE" || deleting} onClick={() => void deleteMember()}>{deleting ? "Deleting..." : "Delete member"}</button></div></section></div>}
+      {deleteTarget && (
+        <div className="modal-backdrop">
+          <section
+            className="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-member-title"
+          >
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              aria-label="Close delete confirmation"
+            >
+              <X size={17} />
+            </button>
+            <p className="eyebrow">Permanent action</p>
+            <h3 id="delete-member-title">Delete {deleteTarget.full_name}?</h3>
+            <p className="muted">
+              This removes the member account and linked financial records. Type{" "}
+              <strong>DELETE</strong> to confirm.
+            </p>
+            <input
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              placeholder="Type DELETE"
+              autoFocus
+            />
+            <div className="dialog-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="danger-button"
+                type="button"
+                disabled={deleteConfirmation !== "DELETE" || deleting}
+                onClick={() => void deleteMember()}
+              >
+                {deleting ? "Deleting..." : "Delete member"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -1181,7 +1359,9 @@ function AdminRecords({
 }) {
   const [memberId, setMemberId] = useState(members[0]?.id ?? "");
   const [accountType, setAccountType] = useState("Savings");
-  const [recordKind, setRecordKind] = useState<"opening" | "activity">("activity");
+  const [recordKind, setRecordKind] = useState<"opening" | "activity">(
+    "activity",
+  );
   const [transactionType, setTransactionType] = useState("Credit");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -1202,19 +1382,20 @@ function AdminRecords({
       p_amount: Number(amount),
       p_effective_date: transactionDate,
     };
-    const { error } = recordKind === "opening"
-      ? await supabase.rpc("set_member_opening_balance", {
-          ...commonPayload,
-          p_override: true,
-        })
-      : await supabase.rpc("record_admin_transaction", {
-          p_user_id: memberId,
-          p_account_type: accountType,
-          p_transaction_type: transactionType,
-          p_amount: Number(amount),
-          p_description: description,
-          p_transaction_date: transactionDate,
-        });
+    const { error } =
+      recordKind === "opening"
+        ? await supabase.rpc("set_member_opening_balance", {
+            ...commonPayload,
+            p_override: true,
+          })
+        : await supabase.rpc("record_admin_transaction", {
+            p_user_id: memberId,
+            p_account_type: accountType,
+            p_transaction_type: transactionType,
+            p_amount: Number(amount),
+            p_description: description,
+            p_transaction_date: transactionDate,
+          });
     if (error) {
       setMessage(error.message);
       setSaving(false);
@@ -1274,7 +1455,12 @@ function AdminRecords({
           <div className="form-row three">
             <label>
               Record type
-              <select value={recordKind} onChange={(event) => setRecordKind(event.target.value as "opening" | "activity")}>
+              <select
+                value={recordKind}
+                onChange={(event) =>
+                  setRecordKind(event.target.value as "opening" | "activity")
+                }
+              >
                 <option value="activity">New savings entry</option>
                 <option value="opening">Existing balance</option>
               </select>
@@ -1290,16 +1476,18 @@ function AdminRecords({
                 <option>Special Savings</option>
               </select>
             </label>
-            {recordKind === "activity" && <label>
-              Entry type
-              <select
-                value={transactionType}
-                onChange={(event) => setTransactionType(event.target.value)}
-              >
-                <option>Credit</option>
-                <option>Debit</option>
-              </select>
-            </label>}
+            {recordKind === "activity" && (
+              <label>
+                Entry type
+                <select
+                  value={transactionType}
+                  onChange={(event) => setTransactionType(event.target.value)}
+                >
+                  <option>Credit</option>
+                  <option>Debit</option>
+                </select>
+              </label>
+            )}
             <label>
               Amount
               <input
@@ -1319,7 +1507,11 @@ function AdminRecords({
               <input
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder={recordKind === "opening" ? "Opening balance" : "Monthly contribution"}
+                placeholder={
+                  recordKind === "opening"
+                    ? "Opening balance"
+                    : "Monthly contribution"
+                }
                 required={recordKind === "activity"}
                 disabled={recordKind === "opening"}
               />
@@ -1485,13 +1677,58 @@ function ProfileView({ profile }: { profile: Profile }) {
           <p className="muted">{profile.email}</p>
         </div>
         <form className="profile-edit-form" onSubmit={saveProfile}>
-          <label>Full name<input value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
-          <label>Username<input value={username} onChange={(event) => setUsername(event.target.value.replace(/\s/g, "").toLowerCase())} required /></label>
-          <label>WhatsApp number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} required /></label>
-          <label>Member number<input value={profile.member_number} readOnly /><span className="field-help">Only an administrator can change this.</span></label>
-          <label>Email<input value={profile.email} readOnly /></label>
-          {message && <p className={message.startsWith("Profile updated") ? "success-message" : "error"}>{message}</p>}
-          <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving changes..." : "Save changes"}</button>
+          <label>
+            Full name
+            <input
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Username
+            <input
+              value={username}
+              onChange={(event) =>
+                setUsername(event.target.value.replace(/\s/g, "").toLowerCase())
+              }
+              required
+            />
+          </label>
+          <label>
+            WhatsApp number
+            <input
+              type="tel"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Member number
+            <input value={profile.member_number} readOnly />
+            <span className="field-help">
+              Only an administrator can change this.
+            </span>
+          </label>
+          <label>
+            Email
+            <input value={profile.email} readOnly />
+          </label>
+          {message && (
+            <p
+              className={
+                message.startsWith("Profile updated")
+                  ? "success-message"
+                  : "error"
+              }
+            >
+              {message}
+            </p>
+          )}
+          <button className="primary-button" type="submit" disabled={saving}>
+            {saving ? "Saving changes..." : "Save changes"}
+          </button>
         </form>
       </section>
     </div>
