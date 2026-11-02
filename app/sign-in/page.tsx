@@ -5,6 +5,10 @@ import { Eye, EyeOff } from "lucide-react";
 import { hasCompletedMemberProfile } from "@/lib/auth/profile-completion";
 import { createClient } from "@/lib/supabase/client";
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export default function AuthPage() {
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [email, setEmail] = useState("");
@@ -26,25 +30,46 @@ export default function AuthPage() {
   }, []);
 
   async function redirectExistingSession() {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) await redirectByRole(user.id);
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+      if (error) throw error;
+      if (user) await redirectByRole(user.id);
+    } catch (error) {
+      setMessage(
+        errorMessage(
+          error,
+          "Unable to check your existing session. Please try again.",
+        ),
+      );
+    }
   }
 
   async function redirectByRole(userId: string) {
     const supabase = createClient();
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
       .from("profiles")
       .select("role, full_name, username, phone, member_number")
       .eq("id", userId)
       .maybeSingle();
+    if (error) throw new Error(`Unable to load your profile: ${error.message}`);
+    if (!profile) {
+      throw new Error(
+        "Your account is authenticated, but its member profile was not found.",
+      );
+    }
     if (profile?.role === "admin") {
       window.location.replace("/admin");
       return;
     }
-    if (profile?.role !== "member") return;
+    if (profile.role !== "member") {
+      throw new Error(
+        "Your account has an unsupported role. Please contact an administrator.",
+      );
+    }
     window.location.replace(
       hasCompletedMemberProfile(profile) ? "/member" : "/onboarding",
     );
@@ -52,58 +77,66 @@ export default function AuthPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true);
-    setMessage("");
     if (mode === "sign-up" && password !== confirmPassword) {
       setMessage("Passwords do not match.");
-      setLoading(false);
       return;
     }
-    const supabase = createClient();
+    setLoading(true);
+    setMessage("");
 
-    const result =
-      mode === "sign-in"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              emailRedirectTo: `${window.location.origin}/`,
-              data: {
-                full_name: fullName,
-                username,
-                phone,
-                member_number: memberNumber,
+    try {
+      const supabase = createClient();
+      const result =
+        mode === "sign-in"
+          ? await supabase.auth.signInWithPassword({ email, password })
+          : await supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                emailRedirectTo: `${window.location.origin}/`,
+                data: {
+                  full_name: fullName,
+                  username,
+                  phone,
+                  member_number: memberNumber,
+                },
               },
-            },
-          });
+            });
 
-    if (result.error) {
-      setMessage(result.error.message);
+      if (result.error) throw result.error;
+
+      if (mode === "sign-up" && !result.data.session) {
+        setMessage(
+          "Account created. Check your email to confirm your account, then sign in.",
+        );
+        return;
+      }
+
+      if (!result.data.user) {
+        throw new Error("Authentication completed without an account session.");
+      }
+
+      await redirectByRole(result.data.user.id);
+    } catch (error) {
+      setMessage(errorMessage(error, "Unable to authenticate. Please try again."));
+    } finally {
       setLoading(false);
-      return;
     }
-
-    if (mode === "sign-up" && !result.data.session) {
-      setMessage(
-        "Account created. Check your email to confirm your account, then sign in.",
-      );
-      setLoading(false);
-      return;
-    }
-
-    if (result.data.user) await redirectByRole(result.data.user.id);
   }
 
   async function googleSignIn() {
     setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (error) {
-      setMessage(error.message);
+    setMessage("");
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) throw error;
+    } catch (error) {
+      setMessage(errorMessage(error, "Unable to start Google sign-in."));
+    } finally {
       setLoading(false);
     }
   }
