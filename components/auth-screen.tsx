@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Chrome, LockKeyhole, ShieldCheck, Users } from "lucide-react";
+import { ArrowRight, Globe, LockKeyhole, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
@@ -182,7 +182,7 @@ export default function AuthScreen() {
             disabled={loading}
             onClick={handleGoogleSignIn}
           >
-            <Chrome data-icon="inline-start" />
+            <Globe data-icon="inline-start" />
             Continue with Google
           </Button>
           <button
