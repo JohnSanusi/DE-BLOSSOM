@@ -19,9 +19,14 @@ export async function GET(request: Request) {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, phone, member_ref')
           .eq('id', user.id)
           .single();
+
+        // If phone or member details are missing (e.g. fresh Google OAuth signup), route to onboarding completion
+        if (!profile?.phone || !profile?.member_ref) {
+          return NextResponse.redirect(`${origin}/auth/complete-profile`);
+        }
 
         const destination = profile?.role === 'admin' ? '/admin' : '/member';
         return NextResponse.redirect(`${origin}${destination}`);

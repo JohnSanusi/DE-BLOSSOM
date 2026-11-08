@@ -127,16 +127,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <ThemeToggle />
             </div>
 
-            <Link
-              href="/member"
-              className="flex items-center justify-between px-3 py-2 text-xs font-medium text-surface-600 dark:text-slate-400 hover:text-surface-900 hover:bg-slate-100 dark:hover:text-white rounded-lg dark:hover:bg-darkSurface-hover transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <ExternalLink className="h-3.5 w-3.5" />
-                Switch to Member View
-              </span>
-            </Link>
-
             <button
               onClick={handleLogout}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"

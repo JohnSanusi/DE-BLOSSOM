@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   UserCircle,
@@ -14,19 +14,31 @@ import {
   Save,
   Loader2,
 } from 'lucide-react';
-import { currentMember } from '@/lib/mock-data';
 import { Card, PageHeader, Avatar, StatusBadge } from '@/components/ui/shared';
 import { formatDate, validatePhone } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 
 export default function MemberProfilePage() {
+  const { user, profile, refreshProfile } = useAuth();
   const { addToast } = useToast();
 
-  const [fullName, setFullName] = useState(currentMember.fullName);
-  const [phone, setPhone] = useState(currentMember.phone);
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const handleProfileUpdate = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '');
+      setPhone(profile.phone || '');
+    } else if (user) {
+      setFullName(user.user_metadata?.full_name || '');
+      setPhone(user.user_metadata?.phone || '');
+    }
+  }, [profile, user]);
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!fullName.trim()) {
@@ -40,13 +52,34 @@ export default function MemberProfilePage() {
     }
 
     setSaving(true);
-    setTimeout(() => {
-      currentMember.fullName = fullName.trim();
-      currentMember.phone = phone.trim();
+    try {
+      const supabase = createClient();
+      if (user) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            full_name: fullName.trim(),
+            phone: phone.trim(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id);
+
+        if (error) throw error;
+        await refreshProfile();
+        addToast('success', 'Profile Updated', 'Your profile details have been saved successfully.');
+      }
+    } catch (err: any) {
+      addToast('error', 'Update Failed', err?.message || 'Could not update profile.');
+    } finally {
       setSaving(false);
-      addToast('success', 'Profile Updated', 'Your profile details have been saved successfully.');
-    }, 1000);
+    }
   };
+
+  const displayName = fullName || profile?.full_name || user?.user_metadata?.full_name || 'Member';
+  const displayEmail = profile?.email || user?.email || 'No email registered';
+  const displayRef = profile?.member_ref || (profile as any)?.member_number || 'Pending Assignment';
+  const displayStatus = profile?.status || 'active';
+  const joinedDate = profile?.created_at || user?.created_at || new Date().toISOString();
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -58,17 +91,17 @@ export default function MemberProfilePage() {
       {/* Profile Header Card */}
       <Card className="p-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-          <Avatar name={fullName} size="lg" className="h-16 w-16 text-xl" />
+          <Avatar name={displayName} size="lg" className="h-16 w-16 text-xl" />
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-surface-900">{fullName}</h2>
-              <StatusBadge status={currentMember.status} />
+              <h2 className="text-xl font-bold text-surface-900 dark:text-white">{displayName}</h2>
+              <StatusBadge status={displayStatus} />
             </div>
-            <p className="font-mono text-xs font-semibold text-brand-900">
-              Cooperative ID: {currentMember.memberRef}
+            <p className="font-mono text-xs font-semibold text-brand-900 dark:text-emerald-400">
+              Cooperative ID: {displayRef}
             </p>
             <p className="text-xs text-surface-400">
-              Member since {formatDate(currentMember.createdAt)}
+              Member since {formatDate(joinedDate)}
             </p>
           </div>
         </div>
@@ -77,7 +110,7 @@ export default function MemberProfilePage() {
       {/* Editable & Immutable Details Form */}
       <Card>
         <form onSubmit={handleProfileUpdate} className="space-y-5">
-          <h3 className="text-sm font-bold text-surface-900 pb-2 border-b border-surface-200">
+          <h3 className="text-sm font-bold text-surface-900 dark:text-white pb-2 border-b border-surface-200 dark:border-darkSurface-border">
             Personal & Contact Information
           </h3>
 
@@ -124,9 +157,9 @@ export default function MemberProfilePage() {
               <div className="relative">
                 <input
                   type="email"
-                  value={currentMember.email}
+                  value={displayEmail}
                   disabled
-                  className="input-field bg-surface-100 text-surface-500 cursor-not-allowed"
+                  className="input-field bg-surface-100 dark:bg-darkSurface-input text-surface-500 cursor-not-allowed"
                 />
                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-surface-400" />
               </div>
@@ -143,9 +176,9 @@ export default function MemberProfilePage() {
               <div className="relative">
                 <input
                   type="text"
-                  value={currentMember.memberRef}
+                  value={displayRef}
                   disabled
-                  className="input-field font-mono bg-surface-100 text-surface-500 cursor-not-allowed"
+                  className="input-field font-mono bg-surface-100 dark:bg-darkSurface-input text-surface-500 cursor-not-allowed"
                 />
                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-surface-400" />
               </div>
@@ -154,16 +187,16 @@ export default function MemberProfilePage() {
           </div>
 
           {/* Non-negotiable security notice */}
-          <div className="p-3.5 rounded-xl bg-surface-100 border border-surface-200 flex items-start gap-3">
+          <div className="p-3.5 rounded-xl bg-surface-100 dark:bg-darkSurface-input border border-surface-200 dark:border-darkSurface-border flex items-start gap-3">
             <Shield className="h-4 w-4 text-surface-500 shrink-0 mt-0.5" />
-            <div className="text-xs text-surface-600 leading-relaxed">
+            <div className="text-xs text-surface-600 dark:text-slate-300 leading-relaxed">
               <strong>Account Protection:</strong> Member role, member identifier, registration date,
               and account approval statuses are locked to prevent unauthorized tampering. Only verified
               contact details can be updated directly.
             </div>
           </div>
 
-          <div className="flex justify-end pt-3 border-t border-surface-200">
+          <div className="flex justify-end pt-3 border-t border-surface-200 dark:border-darkSurface-border">
             <button
               type="submit"
               disabled={saving}
