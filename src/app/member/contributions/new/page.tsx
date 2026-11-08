@@ -19,7 +19,6 @@ import {
   Info,
   HelpCircle,
 } from 'lucide-react';
-import { cooperativeSettings } from '@/lib/mock-data';
 import { Card, PageHeader } from '@/components/ui/shared';
 import { formatCurrency, generateRef } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
@@ -29,6 +28,13 @@ import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { submitContributionAction } from '@/app/actions/contributions';
 import { uploadReceiptAction } from '@/app/actions/storage';
 import { useAuth } from '@/lib/supabase/auth-context';
+
+const cooperativeSettings = {
+  bankName: 'First Bank of Nigeria',
+  bankAccountNumber: '1012345678',
+  bankAccountName: 'DE-BLOSSOM MULTIPURPOSE COOPERATIVE SOCIETY LTD',
+  minRegularContribution: 5000,
+};
 
 export default function NewContributionPage() {
   const router = useRouter();

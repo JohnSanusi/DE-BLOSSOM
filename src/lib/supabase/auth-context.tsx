@@ -4,7 +4,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from './client';
 import { isSupabaseConfigured } from './config';
 import { Profile } from './types';
-import { currentMember, currentAdmin } from '@/lib/mock-data';
 
 interface AuthContextType {
   user: any | null;

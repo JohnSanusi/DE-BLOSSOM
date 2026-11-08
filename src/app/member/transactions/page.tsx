@@ -142,7 +142,7 @@ export default function MemberTransactionsPage() {
         />
         <StatCard
           title="Ledger Entries"
-          value={`${transactions.filter((t) => t.memberId === currentMember.id).length} transactions`}
+          value={`${transactionsList.length} transaction${transactionsList.length === 1 ? '' : 's'}`}
           subtitle="Permanent financial entries"
           icon={<ArrowLeftRight className="h-5 w-5 text-brand-900" />}
         />

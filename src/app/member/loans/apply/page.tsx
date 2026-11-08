@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -15,28 +15,22 @@ import {
   Info,
   ShieldAlert,
 } from 'lucide-react';
-import {
-  currentMember,
-  getMemberSavings,
-  loans,
-  loanApplications,
-} from '@/lib/mock-data';
 import { Card, PageHeader } from '@/components/ui/shared';
 import { formatCurrency, generateRef } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
-import type { LoanApplication } from '@/lib/types';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
+import { submitLoanApplicationAction } from '@/app/actions/loans';
 
 export default function ApplyForLoanPage() {
   const router = useRouter();
   const { addToast } = useToast();
+  const { user } = useAuth();
 
-  const savings = getMemberSavings(currentMember.id);
-  const activeLoans = loans.filter(
-    (l) =>
-      l.memberId === currentMember.id &&
-      (l.status === 'disbursed' || l.status === 'repaying')
-  );
-  const totalOutstanding = activeLoans.reduce((sum, l) => sum + l.outstandingPrincipal, 0);
+  const [regularSavings, setRegularSavings] = useState(0);
+  const [specialSavings, setSpecialSavings] = useState(0);
+  const [totalOutstanding, setTotalOutstanding] = useState(0);
+  const [activeLoansCount, setActiveLoansCount] = useState(0);
 
   const [requestedAmount, setRequestedAmount] = useState('');
   const [purpose, setPurpose] = useState('');
@@ -47,7 +41,45 @@ export default function ApplyForLoanPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    async function loadMemberFinances() {
+      if (!user) return;
+      try {
+        const supabase = createClient();
+        const [summaryRes, loansRes] = await Promise.all([
+          supabase
+            .from('member_financial_summary')
+            .select('*')
+            .eq('member_id', user.id)
+            .maybeSingle(),
+          supabase
+            .from('loans')
+            .select('outstanding_principal')
+            .eq('member_id', user.id)
+            .in('status', ['disbursed', 'repaying']),
+        ]);
+
+        if (summaryRes.data) {
+          setRegularSavings(Number(summaryRes.data.regular_savings || 0));
+          setSpecialSavings(Number(summaryRes.data.special_savings || 0));
+        }
+
+        if (loansRes.data) {
+          const outstanding = loansRes.data.reduce(
+            (sum, l) => sum + Number(l.outstanding_principal || 0),
+            0
+          );
+          setTotalOutstanding(outstanding);
+          setActiveLoansCount(loansRes.data.length);
+        }
+      } catch (err) {
+        console.error('Error loading loan eligibility data:', err);
+      }
+    }
+    loadMemberFinances();
+  }, [user]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     let hasError = false;
     const amountNum = parseFloat(requestedAmount);
@@ -75,29 +107,31 @@ export default function ApplyForLoanPage() {
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      const newApp: LoanApplication = {
-        id: `la_${Date.now()}`,
-        ref: generateRef('LA'),
-        memberId: currentMember.id,
-        memberName: currentMember.fullName,
-        requestedAmount: amountNum,
-        purpose: purpose.trim(),
-        repaymentDuration: parseInt(duration, 10),
-        additionalInfo: additionalInfo.trim() || undefined,
-        status: 'pending',
-        applicationDate: new Date().toISOString(),
-      };
+    try {
+      const formData = new FormData();
+      formData.append('requestedAmount', amountNum.toString());
+      formData.append('tenureMonths', duration);
+      formData.append('purpose', purpose.trim());
+      if (additionalInfo.trim()) {
+        formData.append('additionalInfo', additionalInfo.trim());
+      }
 
-      loanApplications.unshift(newApp);
+      const res = await submitLoanApplicationAction(formData);
+      if (res.success) {
+        setSuccess(true);
+        addToast(
+          'success',
+          'Application Submitted',
+          'Your loan application has been received and queued for committee review.'
+        );
+      } else {
+        addToast('error', 'Submission Failed', res.error || 'Could not submit loan application.');
+      }
+    } catch (err: any) {
+      addToast('error', 'Submission Error', err?.message || 'Something went wrong.');
+    } finally {
       setSubmitting(false);
-      setSuccess(true);
-      addToast(
-        'success',
-        'Application Submitted',
-        'Your loan application has been received and queued for committee review.'
-      );
-    }, 1500);
+    }
   };
 
   if (success) {
@@ -109,10 +143,10 @@ export default function ApplyForLoanPage() {
           </div>
 
           <div>
-            <h2 className="text-xl font-bold text-surface-900">Application Submitted</h2>
-            <p className="text-sm text-surface-500 mt-2 max-w-md mx-auto leading-relaxed">
+            <h2 className="text-xl font-bold text-surface-900 dark:text-white">Application Submitted</h2>
+            <p className="text-sm text-surface-500 dark:text-slate-300 mt-2 max-w-md mx-auto leading-relaxed">
               Your cooperative loan request of{' '}
-              <strong className="text-surface-900">
+              <strong className="text-surface-900 dark:text-white">
                 {formatCurrency(parseFloat(requestedAmount))}
               </strong>{' '}
               has been recorded and sent to the cooperative committee.
@@ -148,50 +182,50 @@ export default function ApplyForLoanPage() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-surface-900">
+          <h1 className="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white">
             Apply for a Cooperative Loan
           </h1>
-          <p className="text-xs text-surface-500 mt-0.5">
+          <p className="text-xs text-surface-500 dark:text-slate-400 mt-0.5">
             Submit a financing request for review by the cooperative management committee.
           </p>
         </div>
       </div>
 
       {/* Member Financial Profile Overview */}
-      <div className="p-5 rounded-2xl bg-white border border-surface-200 shadow-card">
-        <h3 className="text-xs font-bold text-surface-500 uppercase tracking-wider mb-3">
+      <div className="p-5 rounded-2xl bg-white dark:bg-darkSurface-card border border-surface-200 dark:border-darkSurface-border shadow-card">
+        <h3 className="text-xs font-bold text-surface-500 dark:text-slate-400 uppercase tracking-wider mb-3">
           Your Cooperative Financial Record
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3.5 rounded-xl bg-surface-50 border border-surface-200">
-            <span className="text-[11px] text-surface-400 block">Regular Savings</span>
-            <span className="font-bold text-base text-brand-900">
-              {formatCurrency(savings.regularSavings)}
+          <div className="p-3.5 rounded-xl bg-surface-50 dark:bg-darkSurface-bg border border-surface-200 dark:border-darkSurface-border">
+            <span className="text-[11px] text-surface-400 dark:text-slate-400 block">Regular Savings</span>
+            <span className="font-bold text-base text-brand-900 dark:text-emerald-400">
+              {formatCurrency(regularSavings)}
             </span>
-            <span className="text-[10px] text-surface-400 block mt-0.5">
+            <span className="text-[10px] text-surface-400 dark:text-slate-400 block mt-0.5">
               Loan eligibility basis
             </span>
           </div>
-          <div className="p-3.5 rounded-xl bg-surface-50 border border-surface-200">
-            <span className="text-[11px] text-surface-400 block">Special Savings</span>
-            <span className="font-bold text-base text-emerald-700">
-              {formatCurrency(savings.specialSavings)}
+          <div className="p-3.5 rounded-xl bg-surface-50 dark:bg-darkSurface-bg border border-surface-200 dark:border-darkSurface-border">
+            <span className="text-[11px] text-surface-400 dark:text-slate-400 block">Special Savings</span>
+            <span className="font-bold text-base text-emerald-700 dark:text-emerald-300">
+              {formatCurrency(specialSavings)}
             </span>
-            <span className="text-[10px] text-surface-400 block mt-0.5">
+            <span className="text-[10px] text-surface-400 dark:text-slate-400 block mt-0.5">
               Voluntary deposits
             </span>
           </div>
-          <div className="p-3.5 rounded-xl bg-surface-50 border border-surface-200">
-            <span className="text-[11px] text-surface-400 block">Current Outstanding Debt</span>
+          <div className="p-3.5 rounded-xl bg-surface-50 dark:bg-darkSurface-bg border border-surface-200 dark:border-darkSurface-border">
+            <span className="text-[11px] text-surface-400 dark:text-slate-400 block">Current Outstanding Debt</span>
             <span
               className={`font-bold text-base ${
-                totalOutstanding > 0 ? 'text-amber-700' : 'text-surface-700'
+                totalOutstanding > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-surface-700 dark:text-slate-300'
               }`}
             >
               {formatCurrency(totalOutstanding)}
             </span>
-            <span className="text-[10px] text-surface-400 block mt-0.5">
-              {activeLoans.length} active loan facility
+            <span className="text-[10px] text-surface-400 dark:text-slate-400 block mt-0.5">
+              {activeLoansCount} active loan facility
             </span>
           </div>
         </div>
@@ -310,7 +344,7 @@ export default function ApplyForLoanPage() {
             />
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-surface-200">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-surface-200 dark:border-darkSurface-border">
             <Link href="/member/loans" className="btn-secondary text-xs">
               Cancel
             </Link>

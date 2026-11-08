@@ -55,35 +55,38 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 const icons: Record<ToastType, React.ReactNode> = {
-  success: <CheckCircle className="h-5 w-5 text-green-500" />,
-  error: <AlertCircle className="h-5 w-5 text-red-500" />,
-  info: <Info className="h-5 w-5 text-blue-500" />,
-  warning: <AlertTriangle className="h-5 w-5 text-amber-500" />,
+  success: <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />,
+  error: <AlertCircle className="h-5 w-5 text-red-500 shrink-0" />,
+  info: <Info className="h-5 w-5 text-blue-500 shrink-0" />,
+  warning: <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />,
 };
 
-const bgColors: Record<ToastType, string> = {
-  success: 'border-green-200 dark:border-green-800/60 bg-green-50 dark:bg-darkSurface-card text-emerald-950 dark:text-emerald-100',
-  error: 'border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-darkSurface-card text-red-950 dark:text-red-100',
-  info: 'border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-darkSurface-card text-blue-950 dark:text-blue-100',
-  warning: 'border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-darkSurface-card text-amber-950 dark:text-amber-100',
+const toastStyles: Record<ToastType, string> = {
+  success: 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-800/80 shadow-emerald-500/5',
+  error: 'bg-white dark:bg-slate-900 border-red-200 dark:border-red-800/80 shadow-red-500/5',
+  info: 'bg-white dark:bg-slate-900 border-blue-200 dark:border-blue-800/80 shadow-blue-500/5',
+  warning: 'bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-800/80 shadow-amber-500/5',
 };
 
 function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
   return (
     <div
       className={cn(
-        'flex items-start gap-3 rounded-xl border p-4 shadow-modal backdrop-blur-md animate-in slide-in-from-right-full transition-colors',
-        bgColors[toast.type]
+        'flex items-start gap-3 rounded-xl border p-4 shadow-xl backdrop-blur-md animate-in slide-in-from-right-full transition-colors',
+        toastStyles[toast.type]
       )}
     >
-      <div className="shrink-0 mt-0.5">{icons[toast.type]}</div>
+      <div className="mt-0.5">{icons[toast.type]}</div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-surface-900 dark:text-white">{toast.title}</p>
+        <p className="text-sm font-semibold text-slate-900 dark:text-white leading-tight">{toast.title}</p>
         {toast.message && (
-          <p className="text-xs text-surface-600 dark:text-slate-300 mt-0.5 leading-relaxed">{toast.message}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">{toast.message}</p>
         )}
       </div>
-      <button onClick={onClose} className="text-surface-400 hover:text-surface-600 dark:hover:text-white transition-colors">
+      <button
+        onClick={onClose}
+        className="text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-white transition-colors p-0.5 rounded-lg"
+      >
         <X className="h-4 w-4" />
       </button>
     </div>

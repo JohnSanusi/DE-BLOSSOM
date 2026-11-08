@@ -58,7 +58,7 @@ export default function MemberContributionsPage() {
           .from('contributions')
           .select('*')
           .eq('member_id', user.id)
-          .order('created_at', { ascending: false });
+          .order('submission_date', { ascending: false });
 
         if (!error && data) {
           setContributionsList(
@@ -69,15 +69,15 @@ export default function MemberContributionsPage() {
               amount: Number(c.amount),
               type: c.type,
               status: c.status,
-              paymentMethod: c.payment_method,
+              paymentMethod: 'bank_transfer',
               transferReference: c.transfer_reference || c.ref,
               senderName: c.sender_name || 'Member',
               paymentDate: c.payment_date,
               receiptUrl: c.receipt_url,
-              remarks: c.rejection_reason || c.notes || '',
-              reviewedByName: c.reviewed_by_name || null,
-              reviewedAt: c.reviewed_at || null,
-              createdAt: c.created_at,
+              remarks: c.rejection_reason || c.remarks || '',
+              reviewedByName: null,
+              reviewedAt: c.verified_at || null,
+              createdAt: c.submission_date,
             }))
           );
         }

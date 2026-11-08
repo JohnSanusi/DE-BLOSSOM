@@ -21,11 +21,11 @@ import {
   ExternalLink,
   CheckCircle2,
 } from 'lucide-react';
-import { currentAdmin, notifications } from '@/lib/mock-data';
 import { Avatar } from '@/components/ui/shared';
 import { ThemeToggle } from '@/components/ui/theme-provider';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/lib/supabase/auth-context';
 
 const adminNavItems = [
   { name: 'Overview', href: '/admin', icon: LayoutDashboard },
@@ -44,16 +44,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const { addToast } = useToast();
+  const { user, profile, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [adminNotifs, setAdminNotifs] = useState(
-    notifications.filter(
-      (n) =>
-        n.userId === currentAdmin.id ||
-        n.type === 'loan_application_received' ||
-        n.type === 'contribution_submitted'
-    )
-  );
+  const [adminNotifs, setAdminNotifs] = useState<any[]>([]);
+
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Administrator';
+  const displayRef = profile?.member_ref || (profile as any)?.member_number || 'ADM-001';
 
   const unreadCount = adminNotifs.filter((n) => !n.read).length;
 
@@ -62,7 +59,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     addToast('info', 'Notifications', 'All administrative alerts marked as read.');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut();
     addToast('info', 'Signed Out', 'You have been signed out from the administrative portal.');
     router.push('/auth');
   };
@@ -87,10 +85,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           {/* Admin user quick badge */}
           <div className="px-5 py-4 border-b border-surface-100 dark:border-darkSurface-border bg-surface-50/50 dark:bg-darkSurface-bg/40 flex items-center gap-3">
-            <Avatar name={currentAdmin.fullName} size="sm" className="bg-emerald-700 text-white" />
+            <Avatar name={displayName} size="sm" className="bg-emerald-700 text-white" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">{currentAdmin.fullName}</p>
-              <p className="text-xs text-surface-500 dark:text-slate-400 font-mono truncate">{currentAdmin.memberRef}</p>
+              <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">{displayName}</p>
+              <p className="text-xs text-surface-500 dark:text-slate-400 font-mono truncate">{displayRef}</p>
             </div>
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 uppercase">
               Admin
@@ -161,10 +159,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
 
               <div className="px-4 py-3 border-b border-surface-100 dark:border-darkSurface-border bg-surface-50/50 dark:bg-darkSurface-bg/40 flex items-center gap-3">
-                <Avatar name={currentAdmin.fullName} size="sm" className="bg-emerald-700 text-white" />
+                <Avatar name={displayName} size="sm" className="bg-emerald-700 text-white" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">{currentAdmin.fullName}</p>
-                  <p className="text-xs text-surface-500 dark:text-slate-400 font-mono truncate">{currentAdmin.memberRef}</p>
+                  <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">{displayName}</p>
+                  <p className="text-xs text-surface-500 dark:text-slate-400 font-mono truncate">{displayRef}</p>
                 </div>
               </div>
 
@@ -299,9 +297,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
               {/* Administrator Avatar */}
               <div className="flex items-center gap-2.5 p-1 sm:px-2.5 sm:py-1.5 rounded-lg bg-surface-100/60 dark:bg-darkSurface-input">
-                <Avatar name={currentAdmin.fullName} size="sm" className="bg-emerald-700 text-white" />
+                <Avatar name={displayName} size="sm" className="bg-emerald-700 text-white" />
                 <div className="hidden md:block text-left">
-                  <p className="text-xs font-semibold text-surface-900 dark:text-white leading-tight">{currentAdmin.fullName}</p>
+                  <p className="text-xs font-semibold text-surface-900 dark:text-white leading-tight">{displayName}</p>
                   <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold leading-tight uppercase tracking-wider">
                     Executive Admin
                   </p>

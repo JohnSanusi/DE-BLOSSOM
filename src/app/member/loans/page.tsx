@@ -49,12 +49,12 @@ export default function MemberLoansPage() {
             .from('loans')
             .select('*')
             .eq('member_id', user.id)
-            .order('created_at', { ascending: false }),
+            .order('approved_date', { ascending: false }),
           supabase
             .from('loan_applications')
             .select('*')
             .eq('member_id', user.id)
-            .order('created_at', { ascending: false }),
+            .order('application_date', { ascending: false }),
           supabase
             .from('contributions')
             .select('amount')
@@ -72,13 +72,13 @@ export default function MemberLoansPage() {
               principalAmount: Number(l.principal_amount),
               disbursedAmount: Number(l.disbursed_amount || l.principal_amount),
               outstandingPrincipal: Number(l.outstanding_principal),
-              totalRepaid: Number(l.total_repaid || 0),
-              tenureMonths: l.tenure_months,
-              monthlyInstallment: Number(l.monthly_installment || 0),
+              totalRepaid: Number(l.disbursed_amount || l.principal_amount) - Number(l.outstanding_principal),
+              tenureMonths: l.repayment_duration_months || 12,
+              monthlyInstallment: Math.round(Number(l.principal_amount) / (l.repayment_duration_months || 12)),
               purpose: l.purpose,
               status: l.status,
-              disbursedAt: l.disbursed_at || l.created_at,
-              createdAt: l.created_at,
+              disbursedAt: l.disbursement_date || l.approved_date,
+              createdAt: l.approved_date,
             }))
           );
         }
@@ -89,13 +89,13 @@ export default function MemberLoansPage() {
               id: a.id,
               ref: a.ref,
               memberId: a.member_id,
-              amount: Number(a.amount),
-              tenureMonths: a.tenure_months,
+              amount: Number(a.requested_amount || 0),
+              tenureMonths: a.repayment_duration_months || 12,
               purpose: a.purpose,
               status: a.status,
-              createdAt: a.created_at,
-              reviewedByName: a.reviewed_by_name || null,
-              decisionReason: a.decision_reason || null,
+              createdAt: a.application_date,
+              reviewedByName: null,
+              decisionReason: a.review_remarks || null,
             }))
           );
         }

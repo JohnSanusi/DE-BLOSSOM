@@ -16,9 +16,6 @@ import {
   PlusCircle,
   FileText,
 } from 'lucide-react';
-import {
-  cooperativeSettings,
-} from '@/lib/mock-data';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -39,6 +36,12 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
+const cooperativeSettings = {
+  bankName: 'First Bank of Nigeria',
+  bankAccountNumber: '1012345678',
+  bankAccountName: 'DE-BLOSSOM MULTIPURPOSE COOPERATIVE SOCIETY LTD',
+};
+
 export default function MemberDashboardPage() {
   const { user, profile, isMock } = useAuth();
   const [mounted, setMounted] = useState(false);
@@ -46,6 +49,7 @@ export default function MemberDashboardPage() {
   const [liveContributions, setLiveContributions] = useState<any[] | null>(null);
   const [liveLoans, setLiveLoans] = useState<any[] | null>(null);
   const [liveTransactions, setLiveTransactions] = useState<any[] | null>(null);
+  const [pendingRepayment, setPendingRepayment] = useState<{ amount: number; paymentDate: string } | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -87,6 +91,23 @@ export default function MemberDashboardPage() {
         .limit(5)
         .then(({ data }) => {
           if (data) setLiveTransactions(data);
+        });
+
+      supabase
+        .from('repayments')
+        .select('*')
+        .eq('member_id', user.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setPendingRepayment({
+              amount: Number(data.amount),
+              paymentDate: data.payment_date,
+            });
+          }
         });
     }
   }, [user, isMock]);
@@ -149,8 +170,6 @@ export default function MemberDashboardPage() {
         postingDate: t.posting_date,
       }))
     : [];
-
-  const pendingRepayment = null;
 
   return (
     <div className="space-y-8">

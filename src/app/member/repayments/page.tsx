@@ -17,9 +17,6 @@ import {
   Calendar,
 } from 'lucide-react';
 import {
-  cooperativeSettings,
-} from '@/lib/mock-data';
-import {
   Card,
   StatCard,
   StatusBadge,
@@ -33,8 +30,14 @@ import { useAuth } from '@/lib/supabase/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import type { Repayment } from '@/lib/types';
 
+const cooperativeSettings = {
+  bankName: 'First Bank of Nigeria',
+  bankAccountNumber: '1012345678',
+  bankAccountName: 'DE-BLOSSOM MULTIPURPOSE COOPERATIVE SOCIETY LTD',
+};
+
 export default function MemberRepaymentsPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { addToast } = useToast();
 
   const [memberLoans, setMemberLoans] = useState<any[]>([]);
@@ -62,12 +65,12 @@ export default function MemberRepaymentsPage() {
             .from('loans')
             .select('*')
             .eq('member_id', user.id)
-            .order('created_at', { ascending: false }),
+            .order('approved_date', { ascending: false }),
           supabase
             .from('repayments')
             .select('*')
             .eq('member_id', user.id)
-            .order('created_at', { ascending: false }),
+            .order('submission_date', { ascending: false }),
         ]);
 
         if (!loansRes.error && loansRes.data) {
@@ -161,8 +164,8 @@ export default function MemberRepaymentsPage() {
         ref: generateRef('RP'),
         loanId: loan.id,
         loanRef: loan.ref,
-        memberId: currentMember.id,
-        memberName: currentMember.fullName,
+        memberId: user?.id || '',
+        memberName: profile?.full_name || user?.user_metadata?.full_name || 'Member',
         amount: amountNum,
         principalComponent: amountNum,
         interestComponent: 0,

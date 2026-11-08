@@ -17,7 +17,6 @@ import {
   Menu,
   X,
   CheckCircle2,
-  ExternalLink,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/shared';
 import { ThemeToggle } from '@/components/ui/theme-provider';

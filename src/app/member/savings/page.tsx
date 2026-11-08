@@ -32,7 +32,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { WithdrawalRequest } from '@/lib/types';
 
 export default function MemberSavingsPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState<'regular' | 'special'>('regular');
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
@@ -58,12 +58,12 @@ export default function MemberSavingsPage() {
             .from('contributions')
             .select('*')
             .eq('member_id', user.id)
-            .order('payment_date', { ascending: false }),
+            .order('submission_date', { ascending: false }),
           supabase
-            .from('withdrawals')
+            .from('withdrawal_requests')
             .select('*')
             .eq('member_id', user.id)
-            .order('created_at', { ascending: false }),
+            .order('request_date', { ascending: false }),
         ]);
 
         if (!contribRes.error && contribRes.data) {
@@ -76,7 +76,7 @@ export default function MemberSavingsPage() {
               status: c.status,
               paymentDate: c.payment_date,
               transferReference: c.transfer_reference || c.ref,
-              reviewedByName: c.reviewed_by_name || 'Administrator',
+              reviewedByName: 'Administrator',
             }))
           );
         }
@@ -87,11 +87,13 @@ export default function MemberSavingsPage() {
               id: w.id,
               ref: w.ref,
               memberId: w.member_id,
+              memberName: profile?.full_name || 'Member',
               amount: Number(w.amount),
-              savingsType: w.savings_type || 'special',
+              savingsType: 'special' as const,
               status: w.status,
-              reason: w.reason,
-              createdAt: w.created_at,
+              reason: w.reason || '',
+              requestDate: w.request_date,
+              createdAt: w.request_date,
             }))
           );
         }
@@ -154,8 +156,8 @@ export default function MemberSavingsPage() {
       const newRequest: WithdrawalRequest = {
         id: `wr_${Date.now()}`,
         ref: generateRef('WR'),
-        memberId: currentMember.id,
-        memberName: currentMember.fullName,
+        memberId: user?.id || '',
+        memberName: profile?.full_name || user?.user_metadata?.full_name || 'Member',
         amount: amountNum,
         reason: withdrawReason || 'Member requested withdrawal',
         status: 'pending',
