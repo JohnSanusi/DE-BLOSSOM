@@ -103,6 +103,15 @@ export default function MemberDashboardPage() {
     activeLoans: liveSummary ? Number(liveSummary.active_loans_count || 0) : 0,
   };
 
+  const chartData = [
+    { label: 'Jan', amount: 0 },
+    { label: 'Feb', amount: 0 },
+    { label: 'Mar', amount: 0 },
+    { label: 'Apr', amount: 0 },
+    { label: 'May', amount: 0 },
+    { label: 'Jun', amount: summary.regularSavings + summary.specialSavings },
+  ];
+
   const memberContributions = liveContributions
     ? liveContributions.map((c: any) => ({
         id: c.id,
@@ -246,7 +255,7 @@ export default function MemberDashboardPage() {
             {mounted ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
-                  data={memberSavingsChart}
+                  data={chartData}
                   margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                 >
                   <defs>
