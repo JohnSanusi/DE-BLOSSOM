@@ -143,98 +143,50 @@ export default function NewContributionPage() {
     setSubmitting(true);
     setUploadProgress(20);
 
-    if (isSupabaseConfigured()) {
-      try {
-        let uploadedReceiptUrl: string | null = null;
-        if (file) {
-          setUploadProgress(40);
-          const uploadData = new FormData();
-          uploadData.append('file', file);
-          const uploadRes = await uploadReceiptAction(uploadData);
-          if (uploadRes.success && uploadRes.url) {
-            uploadedReceiptUrl = uploadRes.url;
-          }
+    try {
+      let uploadedReceiptUrl: string | null = null;
+      if (file) {
+        setUploadProgress(40);
+        const uploadData = new FormData();
+        uploadData.append('file', file);
+        const uploadRes = await uploadReceiptAction(uploadData);
+        if (uploadRes.success && uploadRes.url) {
+          uploadedReceiptUrl = uploadRes.url;
         }
+      }
 
-        setUploadProgress(70);
-        const contribData = new FormData();
-        contribData.append('amount', amount);
-        contribData.append('savingsType', type);
-        contribData.append('senderName', senderName);
-        contribData.append('paymentMethod', 'bank_transfer');
-        if (transferReference.trim()) {
-          contribData.append('bankReference', transferReference.trim().toUpperCase());
-        }
-        if (uploadedReceiptUrl) {
-          contribData.append('receiptUrl', uploadedReceiptUrl);
-        }
+      setUploadProgress(70);
+      const contribData = new FormData();
+      contribData.append('amount', amount);
+      contribData.append('savingsType', type);
+      contribData.append('senderName', senderName);
+      contribData.append('paymentMethod', 'bank_transfer');
+      if (transferReference.trim()) {
+        contribData.append('bankReference', transferReference.trim().toUpperCase());
+      }
+      if (uploadedReceiptUrl) {
+        contribData.append('receiptUrl', uploadedReceiptUrl);
+      }
 
-        const res = await submitContributionAction(contribData);
-        setUploadProgress(100);
-        setSubmitting(false);
+      const res = await submitContributionAction(contribData);
+      setUploadProgress(100);
+      setSubmitting(false);
 
-        if (!res.success) {
-          addToast('error', 'Submission Failed', res.error || 'Failed to submit contribution.');
-          return;
-        }
-
-        setSubmittedSuccess(true);
-        addToast(
-          'success',
-          'Payment Proof Submitted',
-          'Your transfer slip was received and queued for administrative reconciliation.'
-        );
-        return;
-      } catch (err: any) {
-        setSubmitting(false);
-        addToast('error', 'Submission Error', err?.message || 'Something went wrong.');
+      if (!res.success) {
+        addToast('error', 'Submission Failed', res.error || 'Failed to submit contribution.');
         return;
       }
-    }
 
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(interval);
-          return 90;
-        }
-        return prev + 25;
-      });
-    }, 200);
-
-    setTimeout(() => {
-      clearInterval(interval);
-      setUploadProgress(100);
-
-      // Record contribution with pre-filled or auto-fallback reference
-      const finalRef = transferReference.trim()
-        ? transferReference.trim().toUpperCase()
-        : `SLIP-${Date.now().toString().slice(-8)}`;
-
-      const newContrib: Contribution = {
-        id: `con_${Date.now()}`,
-        ref: generateRef('CON'),
-        memberId: currentMember.id,
-        memberName: currentMember.fullName,
-        type,
-        amount: amountNum,
-        paymentDate,
-        submissionDate: new Date().toISOString(),
-        transferReference: finalRef,
-        receiptUrl: filePreview || '/receipt-mock.pdf',
-        receiptFileName: file ? file.name : 'receipt.png',
-        status: 'pending',
-      };
-
-      contributions.unshift(newContrib);
-      setSubmitting(false);
       setSubmittedSuccess(true);
       addToast(
         'success',
         'Payment Proof Submitted',
         'Your transfer slip was received and queued for administrative reconciliation.'
       );
-    }, 1600);
+    } catch (err: any) {
+      setSubmitting(false);
+      addToast('error', 'Submission Error', err?.message || 'Something went wrong.');
+    }
   };
 
   if (submittedSuccess) {
