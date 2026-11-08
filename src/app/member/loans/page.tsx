@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Landmark,
@@ -14,13 +14,8 @@ import {
   Calendar,
   DollarSign,
   TrendingUp,
+  Loader2,
 } from 'lucide-react';
-import {
-  currentMember,
-  loans,
-  loanApplications,
-  getMemberSavings,
-} from '@/lib/mock-data';
 import {
   Card,
   StatCard,
@@ -30,13 +25,97 @@ import {
   Badge,
 } from '@/components/ui/shared';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 
 export default function MemberLoansPage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'active' | 'applications'>('active');
+  const [memberLoans, setMemberLoans] = useState<any[]>([]);
+  const [memberApplications, setMemberApplications] = useState<any[]>([]);
+  const [regularSavings, setRegularSavings] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const memberLoans = loans.filter((l) => l.memberId === currentMember.id);
-  const memberApplications = loanApplications.filter((la) => la.memberId === currentMember.id);
-  const savings = getMemberSavings(currentMember.id);
+  useEffect(() => {
+    async function loadLoanData() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const supabase = createClient();
+        const [loansRes, appsRes, contribRes] = await Promise.all([
+          supabase
+            .from('loans')
+            .select('*')
+            .eq('member_id', user.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('loan_applications')
+            .select('*')
+            .eq('member_id', user.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('contributions')
+            .select('amount')
+            .eq('member_id', user.id)
+            .eq('type', 'regular')
+            .eq('status', 'approved'),
+        ]);
+
+        if (!loansRes.error && loansRes.data) {
+          setMemberLoans(
+            loansRes.data.map((l) => ({
+              id: l.id,
+              ref: l.ref,
+              memberId: l.member_id,
+              principalAmount: Number(l.principal_amount),
+              disbursedAmount: Number(l.disbursed_amount || l.principal_amount),
+              outstandingPrincipal: Number(l.outstanding_principal),
+              totalRepaid: Number(l.total_repaid || 0),
+              tenureMonths: l.tenure_months,
+              monthlyInstallment: Number(l.monthly_installment || 0),
+              purpose: l.purpose,
+              status: l.status,
+              disbursedAt: l.disbursed_at || l.created_at,
+              createdAt: l.created_at,
+            }))
+          );
+        }
+
+        if (!appsRes.error && appsRes.data) {
+          setMemberApplications(
+            appsRes.data.map((a) => ({
+              id: a.id,
+              ref: a.ref,
+              memberId: a.member_id,
+              amount: Number(a.amount),
+              tenureMonths: a.tenure_months,
+              purpose: a.purpose,
+              status: a.status,
+              createdAt: a.created_at,
+              reviewedByName: a.reviewed_by_name || null,
+              decisionReason: a.decision_reason || null,
+            }))
+          );
+        }
+
+        if (!contribRes.error && contribRes.data) {
+          const total = contribRes.data.reduce((sum, c) => sum + Number(c.amount), 0);
+          setRegularSavings(total);
+        }
+      } catch (err) {
+        console.error('Error fetching loan data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadLoanData();
+  }, [user]);
+
+  const savings = {
+    regularSavings,
+  };
 
   const totalBorrowed = memberLoans.reduce((sum, l) => sum + l.disbursedAmount, 0);
   const outstandingPrincipal = memberLoans.reduce(

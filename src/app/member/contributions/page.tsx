@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   HandCoins,
@@ -16,8 +16,8 @@ import {
   Download,
   Calendar,
   CreditCard,
+  Loader2,
 } from 'lucide-react';
-import { currentMember, contributions } from '@/lib/mock-data';
 import {
   Card,
   StatCard,
@@ -30,22 +30,69 @@ import {
   EmptyState,
 } from '@/components/ui/shared';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 import type { Contribution } from '@/lib/types';
 
 export default function MemberContributionsPage() {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedContribution, setSelectedContribution] = useState<Contribution | null>(null);
+  const [selectedContribution, setSelectedContribution] = useState<any | null>(null);
+  const [contributionsList, setContributionsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const pageSize = 6;
 
+  useEffect(() => {
+    async function loadContributions() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('contributions')
+          .select('*')
+          .eq('member_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          setContributionsList(
+            data.map((c) => ({
+              id: c.id,
+              ref: c.ref,
+              memberId: c.member_id,
+              amount: Number(c.amount),
+              type: c.type,
+              status: c.status,
+              paymentMethod: c.payment_method,
+              transferReference: c.transfer_reference || c.ref,
+              senderName: c.sender_name || 'Member',
+              paymentDate: c.payment_date,
+              receiptUrl: c.receipt_url,
+              remarks: c.rejection_reason || c.notes || '',
+              reviewedByName: c.reviewed_by_name || null,
+              reviewedAt: c.reviewed_at || null,
+              createdAt: c.created_at,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching contributions:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadContributions();
+  }, [user]);
+
   // Filter contributions belonging to this member
   const memberContributions = useMemo(() => {
-    return contributions.filter((c) => {
-      if (c.memberId !== currentMember.id) return false;
-
+    return contributionsList.filter((c) => {
       const matchesSearch =
         c.ref.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.transferReference.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -56,7 +103,7 @@ export default function MemberContributionsPage() {
 
       return matchesSearch && matchesStatus && matchesType;
     });
-  }, [searchTerm, statusFilter, typeFilter]);
+  }, [contributionsList, searchTerm, statusFilter, typeFilter]);
 
   const totalPages = Math.ceil(memberContributions.length / pageSize);
   const paginatedData = memberContributions.slice(
@@ -64,12 +111,12 @@ export default function MemberContributionsPage() {
     currentPage * pageSize
   );
 
-  const approvedTotal = contributions
-    .filter((c) => c.memberId === currentMember.id && c.status === 'approved')
+  const approvedTotal = contributionsList
+    .filter((c) => c.status === 'approved')
     .reduce((sum, c) => sum + c.amount, 0);
 
-  const pendingCount = contributions.filter(
-    (c) => c.memberId === currentMember.id && c.status === 'pending'
+  const pendingCount = contributionsList.filter(
+    (c) => c.status === 'pending'
   ).length;
 
   return (

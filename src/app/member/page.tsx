@@ -17,13 +17,6 @@ import {
   FileText,
 } from 'lucide-react';
 import {
-  currentMember,
-  getMemberDashboardSummary,
-  contributions,
-  loans,
-  repayments,
-  transactions,
-  memberSavingsChart,
   cooperativeSettings,
 } from '@/lib/mock-data';
 import { useAuth } from '@/lib/supabase/auth-context';
@@ -100,16 +93,16 @@ export default function MemberDashboardPage() {
     }
   }, [user, isMock]);
 
-  const displayName = profile?.full_name || currentMember.fullName;
-  const displayRef = profile?.member_number || (profile as any)?.member_ref || currentMember.memberRef;
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || 'Member';
+  const displayRef = profile?.member_number || (profile as any)?.member_ref || 'Pending ID';
 
   const summary = {
-    regularSavings: liveSummary ? Number(liveSummary.regular_savings) : mockSummary.regularSavings,
-    specialSavings: liveSummary ? Number(liveSummary.special_savings) : mockSummary.specialSavings,
-    totalApprovedContributions: liveSummary ? Number(liveSummary.total_savings) : mockSummary.totalApprovedContributions,
-    outstandingLoanBalance: liveSummary ? Number(liveSummary.outstanding_loan_principal) : mockSummary.outstandingLoanBalance,
-    pendingContributions: liveSummary ? Number(liveSummary.pending_contributions_count) : mockSummary.pendingContributions,
-    activeLoans: liveSummary ? Number(liveSummary.active_loans_count) : mockSummary.activeLoans,
+    regularSavings: liveSummary ? Number(liveSummary.regular_savings || 0) : 0,
+    specialSavings: liveSummary ? Number(liveSummary.special_savings || 0) : 0,
+    totalApprovedContributions: liveSummary ? Number(liveSummary.total_savings || 0) : 0,
+    outstandingLoanBalance: liveSummary ? Number(liveSummary.outstanding_loan_principal || 0) : 0,
+    pendingContributions: liveSummary ? Number(liveSummary.pending_contributions_count || 0) : 0,
+    activeLoans: liveSummary ? Number(liveSummary.active_loans_count || 0) : 0,
   };
 
   const memberContributions = liveContributions
@@ -122,7 +115,7 @@ export default function MemberDashboardPage() {
         paymentDate: c.payment_date,
         transferReference: c.transfer_reference || c.ref,
       }))
-    : contributions.filter((c) => c.memberId === currentMember.id).slice(0, 5);
+    : [];
 
   const activeLoans = liveLoans
     ? liveLoans.map((l: any) => ({
@@ -134,7 +127,7 @@ export default function MemberDashboardPage() {
         purpose: l.purpose,
         status: l.status,
       }))
-    : loans.filter((l) => l.memberId === currentMember.id && (l.status === 'disbursed' || l.status === 'repaying'));
+    : [];
 
   const recentTransactions = liveTransactions
     ? liveTransactions.map((t: any) => ({
@@ -148,11 +141,9 @@ export default function MemberDashboardPage() {
         date: t.posting_date,
         postingDate: t.posting_date,
       }))
-    : transactions.filter((t) => t.memberId === currentMember.id).slice(0, 5);
+    : [];
 
-  const pendingRepayment = repayments.find(
-    (r) => r.memberId === currentMember.id && r.status === 'pending'
-  );
+  const pendingRepayment = null;
 
   return (
     <div className="space-y-8">
@@ -402,26 +393,32 @@ export default function MemberDashboardPage() {
             </Link>
           </div>
 
-          <div className="divide-y divide-surface-100">
-            {memberContributions.map((c) => (
-              <div key={c.id} className="py-3 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-surface-900">{c.ref}</span>
-                    <Badge variant={c.type === 'regular' ? 'default' : 'info'}>
-                      {c.type === 'regular' ? 'Regular' : 'Special'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-surface-500 mt-0.5">
-                    Paid {formatDate(c.paymentDate)} • Ref: {c.transferReference}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-bold text-surface-900">{formatCurrency(c.amount)}</p>
-                  <StatusBadge status={c.status} />
-                </div>
+          <div className="divide-y divide-surface-100 dark:divide-darkSurface-border">
+            {memberContributions.length === 0 ? (
+              <div className="py-8 text-center text-xs text-surface-400">
+                No contribution records yet. Use &ldquo;Make Contribution&rdquo; above to submit payment proof.
               </div>
-            ))}
+            ) : (
+              memberContributions.map((c) => (
+                <div key={c.id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-semibold text-surface-900 dark:text-white">{c.ref}</span>
+                      <Badge variant={c.type === 'regular' ? 'default' : 'info'}>
+                        {c.type === 'regular' ? 'Regular' : 'Special'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-surface-500 mt-0.5">
+                      Paid {formatDate(c.paymentDate)} • Ref: {c.transferReference}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-surface-900 dark:text-white">{formatCurrency(c.amount)}</p>
+                    <StatusBadge status={c.status} />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -440,31 +437,37 @@ export default function MemberDashboardPage() {
             </Link>
           </div>
 
-          <div className="divide-y divide-surface-100">
-            {recentTransactions.map((t) => (
-              <div key={t.id} className="py-3 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-surface-900 truncate">{t.description}</p>
-                  <p className="text-[11px] text-surface-400 mt-0.5">
-                    {formatDate(t.date)} • {t.ref}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  {t.credit > 0 ? (
-                    <span className="text-sm font-bold text-emerald-600">
-                      +{formatCurrency(t.credit)}
-                    </span>
-                  ) : (
-                    <span className="text-sm font-bold text-surface-800">
-                      -{formatCurrency(t.debit)}
-                    </span>
-                  )}
-                  <span className="block text-[10px] text-surface-400 capitalize">
-                    {t.category.replace('_', ' ')}
-                  </span>
-                </div>
+          <div className="divide-y divide-surface-100 dark:divide-darkSurface-border">
+            {recentTransactions.length === 0 ? (
+              <div className="py-8 text-center text-xs text-surface-400">
+                No ledger activity posted yet. Verified transactions will appear here.
               </div>
-            ))}
+            ) : (
+              recentTransactions.map((t) => (
+                <div key={t.id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-surface-900 dark:text-white truncate">{t.description}</p>
+                    <p className="text-[11px] text-surface-400 mt-0.5">
+                      {formatDate(t.date)} • {t.ref}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {t.credit > 0 ? (
+                      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                        +{formatCurrency(t.credit)}
+                      </span>
+                    ) : (
+                      <span className="text-sm font-bold text-surface-800 dark:text-slate-200">
+                        -{formatCurrency(t.debit)}
+                      </span>
+                    )}
+                    <span className="block text-[10px] text-surface-400 capitalize">
+                      {t.category.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeftRight,
@@ -12,8 +12,8 @@ import {
   Lock,
   Download,
   ShieldCheck,
+  Loader2,
 } from 'lucide-react';
-import { currentMember, transactions } from '@/lib/mock-data';
 import {
   Card,
   StatCard,
@@ -26,21 +26,64 @@ import {
 } from '@/components/ui/shared';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 
 export default function MemberTransactionsPage() {
+  const { user } = useAuth();
   const { addToast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [transactionsList, setTransactionsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const pageSize = 8;
 
-  const memberTransactions = useMemo(() => {
-    return transactions.filter((t) => {
-      if (t.memberId !== currentMember.id) return false;
+  useEffect(() => {
+    async function loadTransactions() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('member_id', user.id)
+          .order('posting_date', { ascending: false });
 
+        if (!error && data) {
+          setTransactionsList(
+            data.map((t) => ({
+              id: t.id,
+              ref: t.ref,
+              memberId: t.member_id,
+              type: t.type,
+              category: t.category,
+              description: t.description,
+              credit: Number(t.credit),
+              debit: Number(t.debit),
+              relatedRef: t.related_ref || '',
+              status: t.status,
+              postingDate: t.posting_date,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching transactions:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadTransactions();
+  }, [user]);
+
+  const memberTransactions = useMemo(() => {
+    return transactionsList.filter((t) => {
       const matchesSearch =
         t.ref.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -51,7 +94,7 @@ export default function MemberTransactionsPage() {
 
       return matchesSearch && matchesCategory && matchesType;
     });
-  }, [searchTerm, categoryFilter, typeFilter]);
+  }, [transactionsList, searchTerm, categoryFilter, typeFilter]);
 
   const totalPages = Math.ceil(memberTransactions.length / pageSize);
   const paginatedData = memberTransactions.slice(
@@ -59,16 +102,12 @@ export default function MemberTransactionsPage() {
     currentPage * pageSize
   );
 
-  const totalCredits = transactions
-    .filter((t) => t.memberId === currentMember.id)
-    .reduce((sum, t) => sum + t.credit, 0);
+  const totalCredits = transactionsList.reduce((sum, t) => sum + t.credit, 0);
 
-  const totalDebits = transactions
-    .filter((t) => t.memberId === currentMember.id)
-    .reduce((sum, t) => sum + t.debit, 0);
+  const totalDebits = transactionsList.reduce((sum, t) => sum + t.debit, 0);
 
   const handleExportStatement = () => {
-    addToast('info', 'Ledger Statement', 'Generating verified transaction statement (PDF/CSV demo)...');
+    addToast('info', 'Ledger Statement', 'Generating verified transaction statement (PDF/CSV)...');
   };
 
   return (

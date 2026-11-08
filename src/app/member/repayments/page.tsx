@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   RefreshCw,
@@ -17,9 +17,6 @@ import {
   Calendar,
 } from 'lucide-react';
 import {
-  currentMember,
-  loans,
-  repayments,
   cooperativeSettings,
 } from '@/lib/mock-data';
 import {
@@ -32,14 +29,17 @@ import {
 } from '@/components/ui/shared';
 import { formatCurrency, formatDate, generateRef } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 import type { Repayment } from '@/lib/types';
 
 export default function MemberRepaymentsPage() {
+  const { user } = useAuth();
   const { addToast } = useToast();
 
-  const [memberRepaymentsList, setMemberRepaymentsList] = useState<Repayment[]>(
-    repayments.filter((r) => r.memberId === currentMember.id)
-  );
+  const [memberLoans, setMemberLoans] = useState<any[]>([]);
+  const [memberRepaymentsList, setMemberRepaymentsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
   const [selectedLoanId, setSelectedLoanId] = useState('');
@@ -48,12 +48,73 @@ export default function MemberRepaymentsPage() {
     new Date().toISOString().split('T')[0]
   );
   const [transferRef, setTransferRef] = useState('');
+
+  useEffect(() => {
+    async function loadRepayments() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const supabase = createClient();
+        const [loansRes, repaysRes] = await Promise.all([
+          supabase
+            .from('loans')
+            .select('*')
+            .eq('member_id', user.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('repayments')
+            .select('*')
+            .eq('member_id', user.id)
+            .order('created_at', { ascending: false }),
+        ]);
+
+        if (!loansRes.error && loansRes.data) {
+          setMemberLoans(
+            loansRes.data.map((l) => ({
+              id: l.id,
+              ref: l.ref,
+              purpose: l.purpose,
+              principalAmount: Number(l.principal_amount),
+              disbursedAmount: Number(l.disbursed_amount || l.principal_amount),
+              outstandingPrincipal: Number(l.outstanding_principal),
+              status: l.status,
+            }))
+          );
+        }
+
+        if (!repaysRes.error && repaysRes.data) {
+          setMemberRepaymentsList(
+            repaysRes.data.map((r) => ({
+              id: r.id,
+              ref: r.ref,
+              loanId: r.loan_id,
+              memberId: r.member_id,
+              amount: Number(r.amount),
+              principalComponent: Number(r.principal_component || r.amount),
+              interestComponent: Number(r.interest_component || 0),
+              status: r.status,
+              transferReference: r.transfer_reference || r.ref,
+              paymentDate: r.payment_date,
+              auditNote: r.rejection_reason || r.notes || '',
+              reviewedByName: r.reviewed_by_name || null,
+              createdAt: r.created_at,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching repayment data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadRepayments();
+  }, [user]);
   const [submitting, setSubmitting] = useState(false);
 
-  const activeLoans = loans.filter(
-    (l) =>
-      l.memberId === currentMember.id &&
-      (l.status === 'disbursed' || l.status === 'repaying')
+  const activeLoans = memberLoans.filter(
+    (l) => l.status === 'disbursed' || l.status === 'repaying'
   );
 
   const totalOutstanding = activeLoans.reduce((sum, l) => sum + l.outstandingPrincipal, 0);

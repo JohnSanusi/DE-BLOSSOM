@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   PiggyBank,
@@ -17,12 +17,6 @@ import {
   FileCheck,
 } from 'lucide-react';
 import {
-  currentMember,
-  getMemberSavings,
-  contributions,
-  withdrawalRequests,
-} from '@/lib/mock-data';
-import {
   Card,
   StatCard,
   StatusBadge,
@@ -33,9 +27,12 @@ import {
 } from '@/components/ui/shared';
 import { formatCurrency, formatDate, formatDateTime, generateRef } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 import type { WithdrawalRequest } from '@/lib/types';
 
 export default function MemberSavingsPage() {
+  const { user } = useAuth();
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState<'regular' | 'special'>('regular');
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
@@ -44,20 +41,92 @@ export default function MemberSavingsPage() {
   const [withdrawError, setWithdrawError] = useState('');
   const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
 
-  // State for member withdrawals so user can submit dynamically
-  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>(
-    withdrawalRequests.filter((w) => w.memberId === currentMember.id)
-  );
+  const [contributionsList, setContributionsList] = useState<any[]>([]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const savings = getMemberSavings(currentMember.id);
+  useEffect(() => {
+    async function loadData() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const supabase = createClient();
+        const [contribRes, withRes] = await Promise.all([
+          supabase
+            .from('contributions')
+            .select('*')
+            .eq('member_id', user.id)
+            .order('payment_date', { ascending: false }),
+          supabase
+            .from('withdrawals')
+            .select('*')
+            .eq('member_id', user.id)
+            .order('created_at', { ascending: false }),
+        ]);
 
-  // Filter contributions for this member
-  const memberRegularContribs = contributions.filter(
-    (c) => c.memberId === currentMember.id && c.type === 'regular'
-  );
-  const memberSpecialContribs = contributions.filter(
-    (c) => c.memberId === currentMember.id && c.type === 'special'
-  );
+        if (!contribRes.error && contribRes.data) {
+          setContributionsList(
+            contribRes.data.map((c) => ({
+              id: c.id,
+              ref: c.ref,
+              amount: Number(c.amount),
+              type: c.type,
+              status: c.status,
+              paymentDate: c.payment_date,
+              transferReference: c.transfer_reference || c.ref,
+              reviewedByName: c.reviewed_by_name || 'Administrator',
+            }))
+          );
+        }
+
+        if (!withRes.error && withRes.data) {
+          setWithdrawals(
+            withRes.data.map((w) => ({
+              id: w.id,
+              ref: w.ref,
+              memberId: w.member_id,
+              amount: Number(w.amount),
+              savingsType: w.savings_type || 'special',
+              status: w.status,
+              reason: w.reason,
+              createdAt: w.created_at,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching savings data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [user]);
+
+  // Compute balances directly from live contributions
+  const memberRegularContribs = contributionsList.filter((c) => c.type === 'regular');
+  const memberSpecialContribs = contributionsList.filter((c) => c.type === 'special');
+
+  const regularSavingsBalance = memberRegularContribs
+    .filter((c) => c.status === 'approved')
+    .reduce((sum, c) => sum + c.amount, 0);
+
+  const specialSavingsApproved = memberSpecialContribs
+    .filter((c) => c.status === 'approved')
+    .reduce((sum, c) => sum + c.amount, 0);
+
+  const specialWithdrawalsApproved = withdrawals
+    .filter((w) => w.status === 'approved')
+    .reduce((sum, w) => sum + w.amount, 0);
+
+  const specialSavingsBalance = Math.max(0, specialSavingsApproved - specialWithdrawalsApproved);
+
+  const savings = {
+    regularSavings: regularSavingsBalance,
+    specialSavings: specialSavingsBalance,
+    totalSavings: regularSavingsBalance + specialSavingsBalance,
+  };
 
   const handleWithdrawalSubmit = (e: React.FormEvent) => {
     e.preventDefault();

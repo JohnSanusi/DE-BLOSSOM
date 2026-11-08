@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -19,7 +19,6 @@ import {
   CheckCircle2,
   ExternalLink,
 } from 'lucide-react';
-import { currentMember, notifications } from '@/lib/mock-data';
 import { Avatar } from '@/components/ui/shared';
 import { ThemeToggle } from '@/components/ui/theme-provider';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -44,12 +43,16 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
   const { user, profile, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [memberNotifs, setMemberNotifs] = useState(
-    notifications.filter((n) => n.userId === currentMember.id)
-  );
+  const [memberNotifs, setMemberNotifs] = useState<any[]>([]);
 
-  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || currentMember.fullName;
-  const displayRef = profile?.member_ref || (profile as any)?.member_number || currentMember.memberRef;
+  // When notifications table or user changes, notifications start empty for new real members
+  useEffect(() => {
+    // Leave notifications clean for live real accounts
+    setMemberNotifs([]);
+  }, [user]);
+
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Member';
+  const displayRef = profile?.member_ref || (profile as any)?.member_number || 'Pending ID';
 
   const unreadCount = memberNotifs.filter((n) => !n.read).length;
 
