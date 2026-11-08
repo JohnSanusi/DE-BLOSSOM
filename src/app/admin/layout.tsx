@@ -22,7 +22,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { currentAdmin, notifications } from '@/lib/mock-data';
-import { Avatar, MockBanner } from '@/components/ui/shared';
+import { Avatar } from '@/components/ui/shared';
 import { ThemeToggle } from '@/components/ui/theme-provider';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
@@ -69,8 +69,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-darkSurface-bg flex flex-col transition-colors duration-200">
-      <MockBanner />
-
       <div className="flex-1 flex overflow-hidden">
         {/* Desktop Admin Sidebar */}
         <aside className="hidden lg:flex lg:flex-col w-64 bg-white dark:bg-darkSurface-card border-r border-surface-200 dark:border-darkSurface-border shrink-0 transition-colors duration-200">
@@ -137,7 +135,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <ExternalLink className="h-3.5 w-3.5" />
                 Switch to Member View
               </span>
-              <span className="bg-surface-200 dark:bg-slate-800 text-surface-700 dark:text-slate-300 text-[10px] px-1.5 py-0.5 rounded font-medium">Demo</span>
             </Link>
 
             <button

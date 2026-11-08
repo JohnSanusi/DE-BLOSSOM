@@ -6,9 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { validateEmail, validatePassword, cn } from '@/lib/utils';
-import { members, admins } from '@/lib/mock-data';
 import { signInAction, signUpAction } from '@/app/actions/auth';
-import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { createClient } from '@/lib/supabase/client';
 
 function GoogleIcon({ className = 'h-5 w-5' }: { className?: string }) {
@@ -49,16 +47,6 @@ function GoogleAuthButton({
   const handleGoogleAuth = async () => {
     setLoading(true);
     onStart?.();
-
-    if (!isSupabaseConfigured()) {
-      setLoading(false);
-      addToast(
-        'info',
-        'Demo Mode Active',
-        'Google OAuth requires real Supabase credentials in your .env.local file.'
-      );
-      return;
-    }
 
     try {
       const supabase = createClient();
@@ -217,51 +205,20 @@ function SignInForm() {
     setErrors({});
     setLoading(true);
 
-    if (isSupabaseConfigured()) {
-      const formData = new FormData();
-      formData.append('email', email);
-      formData.append('password', password);
+    const formData = new FormData();
+    formData.append('email', email);
+    formData.append('password', password);
 
-      const res = await signInAction(formData);
-      setLoading(false);
+    const res = await signInAction(formData);
+    setLoading(false);
 
-      if (!res.success) {
-        setErrors({ form: res.error || 'Failed to sign in. Please verify your credentials.' });
-        return;
-      }
-
-      addToast('success', 'Signed in successfully', 'Welcome back!');
-      if (res.role === 'admin') {
-        router.push('/admin');
-      } else {
-        router.push('/member');
-      }
+    if (!res.success) {
+      setErrors({ form: res.error || 'Failed to sign in. Please verify your credentials.' });
       return;
     }
 
-    // Simulate mock auth delay
-    await new Promise((r) => setTimeout(r, 800));
-
-    // Mock auth: check email against mock data
-    const member = members.find((m) => m.email === email);
-    const admin = admins.find((a) => a.email === email);
-    const user = member || admin;
-
-    if (!user) {
-      setLoading(false);
-      setErrors({ form: 'Invalid email or password. Try: adaeze.okafor@email.com or admin@deblossom.coop' });
-      return;
-    }
-
-    if (!user.role || (user.role !== 'member' && user.role !== 'admin')) {
-      setLoading(false);
-      setErrors({ form: 'Your account has not been provisioned with a valid role. Please contact the cooperative administrator.' });
-      return;
-    }
-
-    addToast('success', 'Signed in successfully', `Welcome back, ${user.fullName}!`);
-
-    if (user.role === 'admin') {
+    addToast('success', 'Signed in successfully', 'Welcome back!');
+    if (res.role === 'admin') {
       router.push('/admin');
     } else {
       router.push('/member');
@@ -349,18 +306,14 @@ function SignInForm() {
         )}
       </button>
 
-      <div className="mt-4 rounded-lg bg-surface-100 border border-surface-200 p-3">
-        <p className="text-xs text-surface-500 font-medium mb-1">Demo Accounts</p>
-        <p className="text-xs text-surface-400">Member: adaeze.okafor@email.com</p>
-        <p className="text-xs text-surface-400">Admin: admin@deblossom.coop</p>
-        <p className="text-xs text-surface-400 mt-1">Any password works in demo mode.</p>
-      </div>
+
     </form>
     </div>
   );
 }
 
 function RegisterForm() {
+  const router = useRouter();
   const { addToast } = useToast();
   const [form, setForm] = useState({
     fullName: '',
@@ -372,7 +325,6 @@ function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const update = (field: string, value: string) => {
@@ -403,48 +355,23 @@ function RegisterForm() {
     setErrors({});
     setLoading(true);
 
-    if (isSupabaseConfigured()) {
-      const formData = new FormData();
-      formData.append('email', form.email);
-      formData.append('password', form.password);
-      formData.append('fullName', form.fullName);
-      formData.append('phone', form.phone);
+    const formData = new FormData();
+    formData.append('email', form.email);
+    formData.append('password', form.password);
+    formData.append('fullName', form.fullName);
+    formData.append('phone', form.phone);
 
-      const res = await signUpAction(formData);
-      setLoading(false);
+    const res = await signUpAction(formData);
+    setLoading(false);
 
-      if (!res.success) {
-        setErrors({ email: res.error || 'Failed to create account.' });
-        return;
-      }
-
-      setSuccess(true);
-      addToast('success', 'Registration successful', 'Please check your email to verify your account.');
+    if (!res.success) {
+      setErrors({ email: res.error || 'Failed to create account.' });
       return;
     }
 
-    await new Promise((r) => setTimeout(r, 1200));
-    setLoading(false);
-    setSuccess(true);
-    addToast('success', 'Registration successful', 'Please check your email to verify your account.');
+    addToast('success', 'Account created successfully', 'Welcome to DE-BLOSSOM!');
+    router.push('/member');
   };
-
-  if (success) {
-    return (
-      <div className="text-center py-8">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mx-auto mb-4">
-          <Mail className="h-8 w-8 text-green-600" />
-        </div>
-        <h3 className="text-lg font-semibold text-surface-900">Check your email</h3>
-        <p className="text-sm text-surface-500 mt-2 max-w-sm mx-auto">
-          We&apos;ve sent a verification email to <strong>{form.email}</strong>. Please verify your email address to complete your registration.
-        </p>
-        <p className="text-xs text-surface-400 mt-4">
-          Your account will be provisioned with the member role through a secure server-side process.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">

@@ -433,16 +433,5 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
   );
 }
 
-// ─── Mock Banner ─────────────────────────────────────────────
-export function MockBanner() {
-  return (
-    <div className="bg-amber-500/10 dark:bg-amber-500/15 border-b border-amber-500/20 px-4 py-1.5 text-center transition-colors">
-      <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium tracking-wide">
-        Prototype Mode — Operating on verified mock financial records. No real funds are moved.
-      </p>
-    </div>
-  );
-}
-
 // ─── Tooltips ────────────────────────────────────────────────
 export { Tooltip, InfoTooltip } from './tooltip';

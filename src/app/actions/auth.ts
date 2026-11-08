@@ -22,14 +22,6 @@ export async function signInAction(formData: FormData): Promise<AuthResponse> {
     return { success: false, error: 'Email and password are required' };
   }
 
-  if (!isSupabaseConfigured()) {
-    // Graceful fallback for mock/demo mode
-    if (email.includes('admin')) {
-      return { success: true, role: 'admin' };
-    }
-    return { success: true, role: 'member' };
-  }
-
   try {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -78,10 +70,6 @@ export async function signUpAction(formData: FormData): Promise<AuthResponse> {
     return { success: false, error: 'Password must be at least 6 characters' };
   }
 
-  if (!isSupabaseConfigured()) {
-    return { success: true, role: 'member' };
-  }
-
   try {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signUp({
@@ -97,6 +85,21 @@ export async function signUpAction(formData: FormData): Promise<AuthResponse> {
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    if (!data.user) {
+      return { success: false, error: 'Registration failed. Please try again.' };
+    }
+
+    // Auto-login the user directly after registration so no email confirmation step is needed
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInErr) {
+      // User created, return success so frontend can redirect them to sign-in
+      return { success: true, role: 'member' };
     }
 
     revalidatePath('/', 'layout');
