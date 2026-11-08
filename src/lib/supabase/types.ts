@@ -12,7 +12,8 @@ export type LedgerDirection = 'credit' | 'debit';
 
 export interface Profile {
   id: string;
-  member_number: string;
+  member_ref?: string;
+  member_number?: string;
   full_name: string;
   email: string;
   phone: string;

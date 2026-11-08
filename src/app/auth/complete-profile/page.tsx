@@ -27,8 +27,8 @@ export default function CompleteProfilePage() {
       if (profile?.phone) {
         setPhone(profile.phone);
       }
-      if (profile?.member_ref) {
-        setMemberRef(profile.member_ref);
+      if (profile?.member_ref || profile?.member_number) {
+        setMemberRef(profile.member_ref || profile.member_number || '');
       }
     }
   }, [user, profile]);
@@ -60,7 +60,7 @@ export default function CompleteProfilePage() {
       };
 
       // Only update member_ref if user entered one and none is assigned yet
-      if (memberRef.trim() && !profile?.member_ref) {
+      if (memberRef.trim() && !profile?.member_ref && !profile?.member_number) {
         updatePayload.member_ref = memberRef.trim();
       }
 
