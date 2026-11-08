@@ -47,8 +47,6 @@ export default function MemberDashboardPage() {
   const [liveLoans, setLiveLoans] = useState<any[] | null>(null);
   const [liveTransactions, setLiveTransactions] = useState<any[] | null>(null);
 
-  const mockSummary = getMemberDashboardSummary(currentMember.id);
-
   useEffect(() => {
     setMounted(true);
     if (!isMock && user) {
