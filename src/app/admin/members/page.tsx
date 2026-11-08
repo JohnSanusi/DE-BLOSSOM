@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Users,
@@ -13,8 +13,8 @@ import {
   UserCheck,
   UserX,
   ArrowRight,
+  Loader2,
 } from 'lucide-react';
-import { members, getMemberSavings } from '@/lib/mock-data';
 import {
   Card,
   StatCard,
@@ -27,38 +27,87 @@ import {
   Avatar,
 } from '@/components/ui/shared';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import type { User } from '@/lib/types';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 
 export default function AdminMembersPage() {
+  const { user } = useAuth();
+  const [membersList, setMembersList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
 
   const pageSize = 8;
 
+  useEffect(() => {
+    async function loadMembers() {
+      if (!user) return;
+      try {
+        const supabase = createClient();
+        const [summaryRes, profilesRes] = await Promise.all([
+          supabase.from('member_financial_summary').select('*'),
+          supabase.from('profiles').select('id, created_at'),
+        ]);
+
+        const profileDateMap = new Map<string, string>();
+        if (profilesRes.data) {
+          profilesRes.data.forEach((p) => {
+            profileDateMap.set(p.id, p.created_at);
+          });
+        }
+
+        if (summaryRes.data) {
+          setMembersList(
+            summaryRes.data.map((m) => ({
+              id: m.member_id,
+              memberRef: m.member_ref || 'Pending ID',
+              fullName: m.full_name || 'Member',
+              email: m.email || '',
+              phone: m.phone || 'N/A',
+              role: m.role,
+              status: m.status || 'active',
+              regularSavings: Number(m.regular_savings || 0),
+              specialSavings: Number(m.special_savings || 0),
+              totalSavings: Number(m.total_savings || 0),
+              activeLoans: Number(m.active_loans_count || 0),
+              outstandingLoanPrincipal: Number(m.outstanding_loan_principal || 0),
+              createdAt: profileDateMap.get(m.member_id) || new Date().toISOString(),
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching members:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadMembers();
+  }, [user]);
+
   const filteredMembers = useMemo(() => {
-    return members.filter((m) => {
+    return membersList.filter((m) => {
       const matchesSearch =
-        m.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.memberRef.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.phone.includes(searchTerm);
+        (m.fullName && m.fullName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (m.email && m.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (m.memberRef && m.memberRef.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (m.phone && m.phone.includes(searchTerm));
 
       const matchesStatus = statusFilter === 'all' || m.status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [searchTerm, statusFilter]);
+  }, [membersList, searchTerm, statusFilter]);
 
-  const totalPages = Math.ceil(filteredMembers.length / pageSize);
+  const totalPages = Math.ceil(filteredMembers.length / pageSize) || 1;
   const paginatedMembers = filteredMembers.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
 
-  const activeCount = members.filter((m) => m.status === 'active').length;
-  const suspendedCount = members.filter((m) => m.status === 'suspended').length;
-  const pendingCount = members.filter((m) => m.status === 'pending').length;
+  const activeCount = membersList.filter((m) => m.status === 'active').length;
+  const suspendedCount = membersList.filter((m) => m.status === 'suspended').length;
+  const pendingCount = membersList.filter((m) => m.status === 'pending').length;
 
   return (
     <div className="space-y-6">
@@ -122,7 +171,12 @@ export default function AdminMembersPage() {
 
       {/* Members Table */}
       <Card padding="none">
-        {paginatedMembers.length === 0 ? (
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-3 text-surface-400">
+            <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+            <p className="text-xs">Loading member directory...</p>
+          </div>
+        ) : paginatedMembers.length === 0 ? (
           <EmptyState
             icon={<Users className="h-8 w-8" />}
             title="No members found"
@@ -144,65 +198,64 @@ export default function AdminMembersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-100 dark:divide-darkSurface-border">
-                {paginatedMembers.map((member) => {
-                  const savings = getMemberSavings(member.id);
-                  return (
-                    <tr
-                      key={member.id}
-                      className="hover:bg-slate-50 dark:hover:bg-darkSurface-hover transition-colors"
-                    >
-                      <td className="table-cell font-mono text-xs font-bold text-surface-900 dark:text-white">
-                        {member.memberRef}
-                      </td>
-                      <td className="table-cell">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar name={member.fullName} size="sm" />
-                          <div>
-                            <p className="text-xs font-semibold text-surface-900 dark:text-white leading-tight">
-                              {member.fullName}
-                            </p>
-                            <p className="text-[11px] text-surface-500 dark:text-slate-400 leading-tight">
-                              {member.email}
-                            </p>
-                          </div>
+                {paginatedMembers.map((member) => (
+                  <tr
+                    key={member.id}
+                    className="hover:bg-slate-50 dark:hover:bg-darkSurface-hover transition-colors"
+                  >
+                    <td className="table-cell font-mono text-xs font-bold text-surface-900 dark:text-white">
+                      {member.memberRef}
+                    </td>
+                    <td className="table-cell">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar name={member.fullName} size="sm" />
+                        <div>
+                          <p className="text-xs font-semibold text-surface-900 dark:text-white leading-tight">
+                            {member.fullName}
+                          </p>
+                          <p className="text-[11px] text-surface-500 dark:text-slate-400 leading-tight">
+                            {member.email}
+                          </p>
                         </div>
-                      </td>
-                      <td className="table-cell text-xs text-surface-600 dark:text-slate-300 font-mono">
-                        {member.phone}
-                      </td>
-                      <td className="table-cell text-xs text-surface-500 dark:text-slate-400">
-                        {formatDate(member.createdAt)}
-                      </td>
-                      <td className="table-cell font-bold text-xs text-surface-900 dark:text-white">
-                        {formatCurrency(savings.regularSavings)}
-                      </td>
-                      <td className="table-cell font-bold text-xs text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(savings.specialSavings)}
-                      </td>
-                      <td className="table-cell">
-                        <StatusBadge status={member.status} />
-                      </td>
-                      <td className="table-cell text-right">
-                        <Link
-                          href={`/admin/members/${member.id}`}
-                          className="btn-secondary text-xs px-2.5 py-1 inline-flex items-center gap-1"
-                        >
-                          View <ArrowRight className="h-3 w-3" />
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      </div>
+                    </td>
+                    <td className="table-cell text-xs text-surface-600 dark:text-slate-300 font-mono">
+                      {member.phone}
+                    </td>
+                    <td className="table-cell text-xs text-surface-500 dark:text-slate-400">
+                      {formatDate(member.createdAt)}
+                    </td>
+                    <td className="table-cell font-bold text-xs text-surface-900 dark:text-white">
+                      {formatCurrency(member.regularSavings)}
+                    </td>
+                    <td className="table-cell font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(member.specialSavings)}
+                    </td>
+                    <td className="table-cell">
+                      <StatusBadge status={member.status} />
+                    </td>
+                    <td className="table-cell text-right">
+                      <Link
+                        href={`/admin/members/${member.id}`}
+                        className="btn-secondary text-xs px-2.5 py-1 inline-flex items-center gap-1"
+                      >
+                        View <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
 
-        <Pagination
-          page={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-        />
+        {!loading && filteredMembers.length > pageSize && (
+          <Pagination
+            page={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </Card>
     </div>
   );

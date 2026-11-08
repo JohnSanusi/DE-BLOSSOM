@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeftRight,
@@ -14,12 +14,8 @@ import {
   Calendar,
   X,
   FileSpreadsheet,
+  Loader2,
 } from 'lucide-react';
-import {
-  transactions,
-  members,
-  currentAdmin,
-} from '@/lib/mock-data';
 import {
   Card,
   StatCard,
@@ -32,10 +28,16 @@ import {
 } from '@/components/ui/shared';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
-import type { Transaction } from '@/lib/types';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 
 export default function AdminTransactionsPage() {
+  const { user } = useAuth();
   const { addToast } = useToast();
+
+  const [transactionsList, setTransactionsList] = useState<any[]>([]);
+  const [membersList, setMembersList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -48,13 +50,63 @@ export default function AdminTransactionsPage() {
 
   const pageSize = 10;
 
+  useEffect(() => {
+    async function loadTransactions() {
+      if (!user) return;
+      try {
+        const supabase = createClient();
+        const [txnsRes, membersRes] = await Promise.all([
+          supabase
+            .from('transactions')
+            .select('*, profiles:member_id(full_name, member_ref)')
+            .order('posting_date', { ascending: false }),
+          supabase
+            .from('profiles')
+            .select('id, full_name, member_ref')
+            .order('full_name', { ascending: true }),
+        ]);
+
+        if (txnsRes.data) {
+          setTransactionsList(
+            txnsRes.data.map((t) => ({
+              id: t.id,
+              ref: t.ref,
+              memberId: t.member_id,
+              memberName: t.profiles?.full_name || 'Member',
+              memberRef: t.profiles?.member_ref || 'Pending',
+              type: t.type,
+              category: t.category,
+              description: t.description,
+              credit: Number(t.credit),
+              debit: Number(t.debit),
+              relatedRef: t.related_ref || '',
+              sourceRef: t.source_ref || '',
+              status: t.status,
+              date: t.posting_date,
+              postingDate: t.posting_date,
+            }))
+          );
+        }
+
+        if (membersRes.data) {
+          setMembersList(membersRes.data);
+        }
+      } catch (err) {
+        console.error('Error fetching admin transactions:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadTransactions();
+  }, [user]);
+
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((t) => {
+    return transactionsList.filter((t) => {
       // 1. Text search
       const matchesSearch =
-        t.ref.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.ref && t.ref.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (t.memberName && t.memberName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (t.relatedRef && t.relatedRef.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (t.sourceRef && t.sourceRef.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -81,7 +133,6 @@ export default function AdminTransactionsPage() {
           matchesDate = matchesDate && txnDate >= new Date(startDate).getTime();
         }
         if (endDate) {
-          // include end of that day
           const endTimestamp = new Date(endDate).getTime() + 24 * 60 * 60 * 1000 - 1;
           matchesDate = matchesDate && txnDate <= endTimestamp;
         }
@@ -89,9 +140,9 @@ export default function AdminTransactionsPage() {
 
       return matchesSearch && matchesCategory && matchesType && matchesMember && matchesDate;
     });
-  }, [searchTerm, categoryFilter, typeFilter, memberFilter, datePreset, startDate, endDate]);
+  }, [transactionsList, searchTerm, categoryFilter, typeFilter, memberFilter, datePreset, startDate, endDate]);
 
-  const totalPages = Math.ceil(filteredTransactions.length / pageSize);
+  const totalPages = Math.ceil(filteredTransactions.length / pageSize) || 1;
   const paginatedData = filteredTransactions.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
@@ -117,331 +168,209 @@ export default function AdminTransactionsPage() {
     setStartDate('');
     setEndDate('');
     setCurrentPage(1);
-    addToast('info', 'Filters Reset', 'Displaying all financial ledger records.');
-  };
-
-  const handleExportCSV = (exportMode: 'filtered' | 'all' = 'filtered') => {
-    const dataToExport = exportMode === 'all' ? transactions : filteredTransactions;
-
-    if (dataToExport.length === 0) {
-      addToast('error', 'Export Failed', 'No ledger records match the active criteria.');
-      return;
-    }
-
-    const headers = [
-      'Transaction Ref',
-      'Posting Date',
-      'Member Name',
-      'Member ID',
-      'Type',
-      'Category',
-      'Description',
-      'Credit (NGN)',
-      'Debit (NGN)',
-      'Related Facility Ref',
-      'Source Bank Slip Ref',
-      'Journal Status',
-    ];
-
-    const rows = dataToExport.map((t) => [
-      t.ref,
-      t.date,
-      `"${t.memberName}"`,
-      t.memberId,
-      t.type,
-      t.category,
-      `"${t.description.replace(/"/g, '""')}"`,
-      t.credit,
-      t.debit,
-      t.relatedRef || '',
-      t.sourceRef || '',
-      t.status,
-    ]);
-
-    const filterDescriptor = exportMode === 'all' ? 'complete_all' : isFiltered ? 'filtered' : 'complete';
-    const timestamp = new Date().toISOString().split('T')[0];
-
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [
-        `# DE-BLOSSOM COOPERATIVE GENERAL FINANCIAL JOURNAL`,
-        `# Export Mode: ${filterDescriptor.toUpperCase()} (${dataToExport.length} entries)`,
-        `# Exported By: ${currentAdmin.fullName} on ${new Date().toLocaleString()}`,
-        `# Total Credits: NGN ${totalCredits} | Total Debits: NGN ${totalDebits}`,
-        '',
-        headers.join(','),
-        ...rows.map((e) => e.join(',')),
-      ].join('\n');
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `de_blossom_general_ledger_${filterDescriptor}_${timestamp}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    addToast(
-      'success',
-      'Ledger Exported',
-      `Exported ${dataToExport.length} journal postings to CSV file.`
-    );
   };
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Authoritative Financial Ledger"
-        description="The permanent, immutable journal of all verified financial debits and credits across the cooperative society."
-        actions={
-          <div className="flex items-center gap-2">
-            {isFiltered && (
-              <button
-                onClick={resetFilters}
-                className="btn-secondary text-xs flex items-center gap-1.5"
-                title="Clear all active filters"
-              >
-                <X className="h-3.5 w-3.5" />
-                Reset Filters
-              </button>
-            )}
-            <button
-              onClick={() => handleExportCSV('filtered')}
-              className="btn-primary text-xs flex items-center gap-2"
-              title="Download currently filtered ledger as CSV"
-            >
-              <Download className="h-4 w-4" />
-              Export Journal ({filteredTransactions.length})
-            </button>
-          </div>
-        }
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <PageHeader
+          title="General Financial Ledger"
+          description="Authoritative, append-only financial journal. Records are strictly immutable under cooperative governance."
+        />
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold border border-emerald-200 dark:border-emerald-800">
+            <ShieldCheck className="h-4 w-4" />
+            Append-Only Immutability Active
+          </span>
+        </div>
+      </div>
 
-      {/* Financial Health Summary Cards */}
+      {/* Financial Movement Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
-          title={isFiltered ? 'Filtered Inflow / Credits' : 'Total Ledger Inflow / Credits'}
+          title="Total Ledger Credits (+)"
           value={formatCurrency(totalCredits)}
-          subtitle={`${filteredTransactions.filter((t) => t.credit > 0).length} credit postings`}
-          tooltip="Total Verified Credits: Sum of all approved money entering the cooperative ledger across regular savings, special savings, and loan repayments."
+          subtitle={`${filteredTransactions.filter((t) => t.credit > 0).length} cash inflow entries`}
           icon={<ArrowDownLeft className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
         />
         <StatCard
-          title={isFiltered ? 'Filtered Outflow / Debits' : 'Total Ledger Outflow / Debits'}
+          title="Total Ledger Debits (-)"
           value={formatCurrency(totalDebits)}
-          subtitle={`${filteredTransactions.filter((t) => t.debit > 0).length} disbursement debits`}
-          tooltip="Total Authorized Outflows: Sum of all verified money leaving the cooperative ledger, including authorized loan disbursements and approved withdrawals."
-          icon={<ArrowUpRight className="h-5 w-5 text-surface-600 dark:text-slate-400" />}
+          subtitle={`${filteredTransactions.filter((t) => t.debit > 0).length} cash outflow entries`}
+          icon={<ArrowUpRight className="h-5 w-5 text-red-600 dark:text-red-400" />}
         />
         <StatCard
-          title={isFiltered ? 'Filtered Net Movement' : 'Total Verified Postings'}
-          value={isFiltered ? formatCurrency(netMovement) : `${transactions.length} entries`}
-          subtitle={isFiltered ? 'Net balance of current view' : 'All transactions reconciled'}
-          tooltip="Immutable Journal: Reconciled postings in the general ledger. Each entry is tied to an audited source payment or disbursement slip."
-          icon={<ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
+          title="Net Cash Movement"
+          value={formatCurrency(netMovement)}
+          subtitle="Inflows minus outflows"
+          icon={<ArrowLeftRight className="h-5 w-5 text-brand-900 dark:text-sky-400" />}
+          className={netMovement >= 0 ? '' : 'border-red-200 dark:border-red-900/60'}
         />
       </div>
 
-      {/* Strict Immutability Notice Banner */}
-      <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-darkSurface-card border border-emerald-200 dark:border-darkSurface-border text-slate-800 dark:text-slate-200 flex items-start gap-3 shadow-sm transition-colors">
-        <Lock className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-        <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-          <strong className="text-emerald-950 dark:text-white">Strict Ledger Immutability Architecture:</strong> The
-          financial ledger cannot be modified or deleted via ordinary member or administrator
-          interfaces. Every entry represents an immutable financial movement. Corrections must be
-          executed exclusively through controlled, audited adjustment transactions.
-        </div>
-      </div>
-
-      {/* Advanced Filter Suite */}
+      {/* Filters Card */}
       <Card padding="sm" className="space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <SearchInput
-            value={searchTerm}
-            onChange={(v) => {
-              setSearchTerm(v);
-              setCurrentPage(1);
-            }}
-            placeholder="Search reference, note, ID..."
-          />
+        <div className="flex flex-col lg:flex-row gap-3">
+          <div className="flex-1">
+            <SearchInput
+              value={searchTerm}
+              onChange={(v) => {
+                setSearchTerm(v);
+                setCurrentPage(1);
+              }}
+              placeholder="Search reference (TXN-...), member name, description, or external bank reference..."
+            />
+          </div>
 
-          <Select
-            value={categoryFilter}
-            onChange={(val) => {
-              setCategoryFilter(val);
-              setCurrentPage(1);
-            }}
-            options={[
-              { label: 'All Categories', value: 'all' },
-              { label: 'Regular Savings', value: 'regular_savings' },
-              { label: 'Special Savings', value: 'special_savings' },
-              { label: 'Loan Facility', value: 'loan' },
-            ]}
-          />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <Select
+              value={categoryFilter}
+              onChange={(val) => {
+                setCategoryFilter(val);
+                setCurrentPage(1);
+              }}
+              options={[
+                { label: 'All Categories', value: 'all' },
+                { label: 'Regular Savings', value: 'regular_savings' },
+                { label: 'Special Savings', value: 'special_savings' },
+                { label: 'Loan Book', value: 'loan' },
+                { label: 'General Society', value: 'general' },
+              ]}
+            />
 
-          <Select
-            value={typeFilter}
-            onChange={(val) => {
-              setTypeFilter(val);
-              setCurrentPage(1);
-            }}
-            options={[
-              { label: 'All Transaction Types', value: 'all' },
-              { label: 'Member Contribution', value: 'contribution' },
-              { label: 'Loan Disbursement', value: 'loan_disbursement' },
-              { label: 'Loan Repayment', value: 'loan_repayment' },
-              { label: 'Special Withdrawal', value: 'withdrawal' },
-            ]}
-          />
+            <Select
+              value={typeFilter}
+              onChange={(val) => {
+                setTypeFilter(val);
+                setCurrentPage(1);
+              }}
+              options={[
+                { label: 'All Movement Types', value: 'all' },
+                { label: 'Contributions', value: 'contribution' },
+                { label: 'Disbursements', value: 'loan_disbursement' },
+                { label: 'Repayments', value: 'loan_repayment' },
+                { label: 'Withdrawals', value: 'withdrawal' },
+              ]}
+            />
 
-          <Select
-            value={memberFilter}
-            onChange={(val) => {
-              setMemberFilter(val);
-              setCurrentPage(1);
-            }}
-            options={[
-              { label: 'All Members', value: 'all' },
-              ...members.map((m) => ({ label: m.fullName, value: m.id })),
-            ]}
-          />
+            <Select
+              value={memberFilter}
+              onChange={(val) => {
+                setMemberFilter(val);
+                setCurrentPage(1);
+              }}
+              options={[
+                { label: 'All Members', value: 'all' },
+                ...membersList.map((m) => ({
+                  label: m.full_name,
+                  value: m.id,
+                })),
+              ]}
+            />
+          </div>
         </div>
 
-        {/* Date Filter Presets Row */}
-        <div className="pt-2 border-t border-surface-100 dark:border-darkSurface-border flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-surface-600 dark:text-slate-400 flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5 text-emerald-600" /> Date Preset:
-            </span>
-            <div className="inline-flex rounded-lg border border-surface-200 dark:border-darkSurface-border p-0.5 bg-surface-50 dark:bg-darkSurface-bg">
-              {(
-                [
-                  { id: 'all', label: 'All Time' },
-                  { id: 'this_month', label: 'This Month' },
-                  { id: '30d', label: 'Last 30 Days' },
-                  { id: '90d', label: 'Last 90 Days' },
-                  { id: 'custom', label: 'Custom Range' },
-                ] as const
-              ).map((preset) => (
-                <button
-                  key={preset.id}
-                  onClick={() => {
-                    setDatePreset(preset.id);
-                    setCurrentPage(1);
-                  }}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                    datePreset === preset.id
-                      ? 'bg-white dark:bg-darkSurface-hover text-surface-900 dark:text-white shadow-sm font-semibold'
-                      : 'text-surface-600 dark:text-slate-400 hover:text-surface-900 dark:hover:text-white'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
+        {/* Date presets & reset */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-surface-100 dark:border-darkSurface-border text-xs">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-surface-500 dark:text-slate-400 text-[11px] font-semibold mr-1">Time Period:</span>
+            {(['all', '30d', '90d', 'this_month'] as const).map((preset) => (
+              <button
+                key={preset}
+                onClick={() => {
+                  setDatePreset(preset);
+                  setCurrentPage(1);
+                }}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                  datePreset === preset
+                    ? 'bg-brand-900 dark:bg-emerald-600 text-white shadow-xs'
+                    : 'text-surface-600 dark:text-slate-300 hover:bg-surface-100 dark:hover:bg-darkSurface-hover'
+                }`}
+              >
+                {preset === 'all'
+                  ? 'All History'
+                  : preset === '30d'
+                  ? 'Past 30 Days'
+                  : preset === '90d'
+                  ? 'Past 90 Days'
+                  : 'This Month'}
+              </button>
+            ))}
           </div>
 
-          {/* Custom Date Pickers (visible if custom selected) */}
-          {datePreset === 'custom' && (
-            <div className="flex items-center gap-2 animate-fade-in">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="input-field text-xs py-1 px-2.5 w-36"
-                placeholder="From date"
-              />
-              <span className="text-surface-400">to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="input-field text-xs py-1 px-2.5 w-36"
-                placeholder="To date"
-              />
-            </div>
+          {isFiltered && (
+            <button
+              onClick={resetFilters}
+              className="text-red-600 dark:text-red-400 hover:underline font-semibold flex items-center gap-1"
+            >
+              <X className="h-3.5 w-3.5" />
+              Reset Filters ({filteredTransactions.length} results)
+            </button>
           )}
-
-          {/* Quick Active Filter Pill */}
-          <div className="text-xs text-surface-500 dark:text-slate-400">
-            Showing <strong className="text-surface-900 dark:text-white">{filteredTransactions.length}</strong> of{' '}
-            {transactions.length} entries
-          </div>
         </div>
       </Card>
 
       {/* Ledger Table */}
       <Card padding="none">
-        {paginatedData.length === 0 ? (
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-3 text-surface-400">
+            <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+            <p className="text-xs">Loading immutable ledger...</p>
+          </div>
+        ) : paginatedData.length === 0 ? (
           <EmptyState
             icon={<ArrowLeftRight className="h-8 w-8" />}
             title="No ledger entries found"
-            description="No transaction journal entries match your active search filters."
-            action={
-              isFiltered ? (
-                <button onClick={resetFilters} className="btn-secondary text-xs">
-                  Reset All Filters
-                </button>
-              ) : undefined
-            }
+            description="No transactions matched your active filters."
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-surface-200 dark:border-darkSurface-border bg-surface-50/50 dark:bg-darkSurface-bg/50">
-                  <th className="table-header">Transaction Ref</th>
                   <th className="table-header">Posting Date</th>
+                  <th className="table-header">Journal Ref</th>
                   <th className="table-header">Member</th>
                   <th className="table-header">Category</th>
                   <th className="table-header">Description</th>
-                  <th className="table-header">Credit (+)</th>
-                  <th className="table-header">Debit (-)</th>
-                  <th className="table-header">Source Ref</th>
-                  <th className="table-header">Status</th>
+                  <th className="table-header text-right">Credit (+)</th>
+                  <th className="table-header text-right">Debit (-)</th>
+                  <th className="table-header">Linked Source</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-100 dark:divide-darkSurface-border">
                 {paginatedData.map((t) => (
                   <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-darkSurface-hover transition-colors">
-                    <td className="table-cell font-mono font-bold text-surface-900 dark:text-white">{t.ref}</td>
-                    <td className="table-cell text-surface-600 dark:text-slate-400">{formatDate(t.date)}</td>
-                    <td className="table-cell font-semibold text-surface-900 dark:text-white">{t.memberName}</td>
-                    <td className="table-cell capitalize">
-                      <Badge
-                        variant={
-                          t.category === 'regular_savings'
-                            ? 'default'
-                            : t.category === 'special_savings'
-                            ? 'success'
-                            : 'warning'
-                        }
-                      >
+                    <td className="table-cell text-xs text-surface-600 dark:text-slate-300 font-mono whitespace-nowrap">
+                      {formatDate(t.date)}
+                    </td>
+                    <td className="table-cell font-mono text-xs font-bold text-surface-900 dark:text-white">
+                      {t.ref}
+                    </td>
+                    <td className="table-cell">
+                      <span className="text-xs font-semibold text-surface-900 dark:text-white block">
+                        {t.memberName}
+                      </span>
+                      <span className="text-[10px] text-surface-400 dark:text-slate-400 font-mono">
+                        Ref: {t.memberRef}
+                      </span>
+                    </td>
+                    <td className="table-cell">
+                      <Badge variant="outline" className="capitalize text-[10px]">
                         {t.category.replace('_', ' ')}
                       </Badge>
                     </td>
-                    <td className="table-cell text-surface-700 dark:text-slate-300 max-w-xs truncate">
+                    <td className="table-cell text-xs text-surface-700 dark:text-slate-300 max-w-sm leading-snug">
                       {t.description}
                     </td>
-                    <td className="table-cell font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                    <td className="table-cell text-right font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
                       {t.credit > 0 ? `+${formatCurrency(t.credit)}` : '—'}
                     </td>
-                    <td className="table-cell font-bold text-amber-600 dark:text-amber-400 font-mono">
+                    <td className="table-cell text-right font-mono font-bold text-xs text-slate-800 dark:text-slate-200">
                       {t.debit > 0 ? `-${formatCurrency(t.debit)}` : '—'}
                     </td>
-                    <td className="table-cell font-mono text-[11px] text-surface-500 dark:text-slate-400">
-                      {t.sourceRef || t.relatedRef || '—'}
-                    </td>
-                    <td className="table-cell">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 uppercase">
-                        {t.status}
-                      </span>
+                    <td className="table-cell font-mono text-xs text-surface-500 dark:text-slate-400">
+                      {t.relatedRef || t.sourceRef || '—'}
                     </td>
                   </tr>
                 ))}
@@ -450,11 +379,13 @@ export default function AdminTransactionsPage() {
           </div>
         )}
 
-        <Pagination
-          page={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-        />
+        {!loading && filteredTransactions.length > pageSize && (
+          <Pagination
+            page={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </Card>
     </div>
   );

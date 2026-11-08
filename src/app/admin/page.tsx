@@ -18,16 +18,6 @@ import {
   ShieldCheck,
   Eye,
 } from 'lucide-react';
-import {
-  getAdminDashboardSummary,
-  contributions,
-  loanApplications,
-  loans,
-  transactions,
-  auditLog,
-  contributionsOverviewChart,
-  memberGrowthChart,
-} from '@/lib/mock-data';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -51,6 +41,22 @@ import {
   Legend,
 } from 'recharts';
 
+function getLast6Months() {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const now = new Date();
+  const result = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push({
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      label: months[d.getMonth()],
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+    });
+  }
+  return result;
+}
+
 export default function AdminDashboardPage() {
   const { user, isMock } = useAuth();
   const [mounted, setMounted] = useState(false);
@@ -60,8 +66,8 @@ export default function AdminDashboardPage() {
   const [livePendingLoanApps, setLivePendingLoanApps] = useState<any[] | null>(null);
   const [liveTransactions, setLiveTransactions] = useState<any[] | null>(null);
   const [liveAudit, setLiveAudit] = useState<any[] | null>(null);
-
-  const mockSummary = getAdminDashboardSummary();
+  const [approvedContribs, setApprovedContribs] = useState<any[]>([]);
+  const [allProfiles, setAllProfiles] = useState<any[]>([]);
 
   useEffect(() => {
     setMounted(true);
@@ -114,19 +120,61 @@ export default function AdminDashboardPage() {
         .then(({ data }) => {
           if (data) setLiveAudit(data);
         });
+
+      // Fetch approved contributions for dynamic chart
+      supabase
+        .from('contributions')
+        .select('amount, type, payment_date, submission_date')
+        .eq('status', 'approved')
+        .then(({ data }) => {
+          if (data) setApprovedContribs(data);
+        });
+
+      // Fetch profiles for dynamic member growth chart
+      supabase
+        .from('profiles')
+        .select('created_at, status')
+        .then(({ data }) => {
+          if (data) setAllProfiles(data);
+        });
     }
   }, [user, isMock]);
 
   const summary = {
-    totalMembers: liveStats ? Number(liveStats.total_members) : mockSummary.totalMembers,
-    totalApprovedContributions: liveStats ? Number(liveStats.total_society_capital) : mockSummary.totalApprovedContributions,
-    pendingVerifications: liveStats ? Number(liveStats.pending_contributions_count) : mockSummary.pendingVerifications,
-    activeLoans: liveStats ? Number(liveStats.active_loans_count) : mockSummary.activeLoans,
-    outstandingLoanPrincipal: liveStats ? Number(liveStats.outstanding_loan_principal) : mockSummary.outstandingLoanPrincipal,
-    pendingLoanApplications: liveStats ? Number(liveStats.pending_loan_apps_count) : mockSummary.pendingLoanApplications,
-    totalRegularSavings: liveStats ? Number(liveStats.total_regular_savings) : mockSummary.totalRegularSavings,
-    totalSpecialSavings: liveStats ? Number(liveStats.total_special_savings) : mockSummary.totalSpecialSavings,
+    totalMembers: liveStats ? Number(liveStats.total_members) : 0,
+    totalApprovedContributions: liveStats ? Number(liveStats.total_society_capital) : 0,
+    pendingVerifications: liveStats ? Number(liveStats.pending_contributions_count) : 0,
+    activeLoans: liveStats ? Number(liveStats.active_loans_count) : 0,
+    outstandingLoanPrincipal: liveStats ? Number(liveStats.outstanding_loan_principal) : 0,
+    pendingLoanApplications: liveStats ? Number(liveStats.pending_loan_apps_count) : 0,
+    totalRegularSavings: liveStats ? Number(liveStats.total_regular_savings) : 0,
+    totalSpecialSavings: liveStats ? Number(liveStats.total_special_savings) : 0,
   };
+
+  // Dynamic Chart 1: Monthly Approved Contributions
+  const months = getLast6Months();
+  const contributionsOverviewChart = months.map((m) => {
+    let regular = 0;
+    let special = 0;
+    approvedContribs.forEach((c) => {
+      const d = c.payment_date || c.submission_date;
+      if (d && String(d).startsWith(m.key)) {
+        if (c.type === 'regular') regular += Number(c.amount || 0);
+        else special += Number(c.amount || 0);
+      }
+    });
+    return { label: m.label, value: regular, value2: special };
+  });
+
+  // Dynamic Chart 2: Cumulative Member Growth
+  const memberGrowthChart = months.map((m) => {
+    const endOfMonth = new Date(m.year, m.month + 1, 0, 23, 59, 59);
+    const count = allProfiles.filter((p) => {
+      const d = new Date(p.created_at || 0);
+      return d <= endOfMonth;
+    }).length;
+    return { label: m.label, value: count || allProfiles.length };
+  });
 
   const pendingContributions = livePendingContribs
     ? livePendingContribs.map((c: any) => ({
@@ -140,7 +188,7 @@ export default function AdminDashboardPage() {
         transferReference: c.transfer_reference || c.ref,
         receiptUrl: c.receipt_url,
       }))
-    : contributions.filter((c) => c.status === 'pending');
+    : [];
 
   const pendingLoanApps = livePendingLoanApps
     ? livePendingLoanApps.map((la: any) => ({
@@ -154,7 +202,7 @@ export default function AdminDashboardPage() {
         status: la.status,
         date: la.application_date,
       }))
-    : loanApplications.filter((la) => la.status === 'pending' || la.status === 'under_review');
+    : [];
 
   const recentTransactions = liveTransactions
     ? liveTransactions.map((t: any) => ({
@@ -169,7 +217,7 @@ export default function AdminDashboardPage() {
         date: t.posting_date,
         postingDate: t.posting_date,
       }))
-    : transactions.slice(0, 5);
+    : [];
 
   const recentAudit = liveAudit
     ? liveAudit.map((a: any) => ({
@@ -180,7 +228,7 @@ export default function AdminDashboardPage() {
         details: a.details,
         timestamp: a.created_at,
       }))
-    : auditLog.slice(0, 5);
+    : [];
 
   return (
     <div className="space-y-8">

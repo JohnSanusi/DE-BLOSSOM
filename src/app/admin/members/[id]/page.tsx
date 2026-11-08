@@ -1,8 +1,7 @@
 'use client';
 
-import React, { use, useState } from 'react';
+import React, { use, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import {
   ArrowLeft,
   Users,
@@ -19,15 +18,8 @@ import {
   Calendar,
   Lock,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react';
-import {
-  members,
-  contributions,
-  loans,
-  loanApplications,
-  transactions,
-  getMemberSavings,
-} from '@/lib/mock-data';
 import {
   Card,
   StatCard,
@@ -40,6 +32,8 @@ import {
 } from '@/components/ui/shared';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 import type { AccountStatus } from '@/lib/types';
 
 interface PageProps {
@@ -49,24 +43,162 @@ interface PageProps {
 export default function AdminMemberDetailPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const memberId = resolvedParams.id;
+  const { user } = useAuth();
   const { addToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'contributions' | 'loans' | 'transactions'>('overview');
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const member = members.find((m) => m.id === memberId);
+  const [member, setMember] = useState<any>(null);
+  const [memberContribs, setMemberContribs] = useState<any[]>([]);
+  const [memberLoans, setMemberLoans] = useState<any[]>([]);
+  const [memberTxns, setMemberTxns] = useState<any[]>([]);
 
-  // Local state for account status so toggle works live in demo
-  const [currentStatus, setCurrentStatus] = useState<AccountStatus>(
-    member ? member.status : 'active'
-  );
+  useEffect(() => {
+    async function loadMemberDetail() {
+      if (!user) return;
+      try {
+        const supabase = createClient();
+        const [summaryRes, profileRes, contribsRes, loansRes, txnsRes] = await Promise.all([
+          supabase
+            .from('member_financial_summary')
+            .select('*')
+            .eq('member_id', memberId)
+            .maybeSingle(),
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', memberId)
+            .maybeSingle(),
+          supabase
+            .from('contributions')
+            .select('*')
+            .eq('member_id', memberId)
+            .order('submission_date', { ascending: false }),
+          supabase
+            .from('loans')
+            .select('*')
+            .eq('member_id', memberId)
+            .order('approved_date', { ascending: false }),
+          supabase
+            .from('transactions')
+            .select('*')
+            .eq('member_id', memberId)
+            .order('posting_date', { ascending: false }),
+        ]);
+
+        const profileData = profileRes.data || {};
+        const summaryData = summaryRes.data || {};
+
+        if (profileRes.data || summaryRes.data) {
+          setMember({
+            id: memberId,
+            fullName: summaryData.full_name || profileData.full_name || 'Member',
+            email: summaryData.email || profileData.email || '',
+            phone: summaryData.phone || profileData.phone || 'N/A',
+            memberRef: summaryData.member_ref || profileData.member_ref || 'Pending',
+            status: (profileData.status || summaryData.status || 'active') as AccountStatus,
+            role: profileData.role || summaryData.role || 'member',
+            createdAt: profileData.created_at || new Date().toISOString(),
+            regularSavings: Number(summaryData.regular_savings || 0),
+            specialSavings: Number(summaryData.special_savings || 0),
+            totalSavings: Number(summaryData.total_savings || 0),
+            outstandingPrincipal: Number(summaryData.outstanding_loan_principal || 0),
+          });
+        }
+
+        if (contribsRes.data) {
+          setMemberContribs(
+            contribsRes.data.map((c) => ({
+              id: c.id,
+              ref: c.ref,
+              amount: Number(c.amount),
+              type: c.type,
+              status: c.status,
+              paymentDate: c.payment_date,
+              transferReference: c.transfer_reference || c.ref,
+            }))
+          );
+        }
+
+        if (loansRes.data) {
+          setMemberLoans(
+            loansRes.data.map((l) => ({
+              id: l.id,
+              ref: l.ref,
+              principalAmount: Number(l.principal_amount),
+              disbursedAmount: Number(l.disbursed_amount || l.principal_amount),
+              outstandingPrincipal: Number(l.outstanding_principal),
+              purpose: l.purpose,
+              status: l.status,
+              approvedDate: l.approved_date,
+            }))
+          );
+        }
+
+        if (txnsRes.data) {
+          setMemberTxns(
+            txnsRes.data.map((t) => ({
+              id: t.id,
+              ref: t.ref,
+              category: t.category,
+              type: t.type,
+              description: t.description,
+              credit: Number(t.credit),
+              debit: Number(t.debit),
+              postingDate: t.posting_date,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching member details:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadMemberDetail();
+  }, [user, memberId]);
+
+  const handleToggleStatus = async () => {
+    if (!member) return;
+    const nextStatus: AccountStatus = member.status === 'active' ? 'suspended' : 'active';
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: nextStatus, updated_at: new Date().toISOString() })
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      setMember((prev: any) => ({ ...prev, status: nextStatus }));
+      setSuspendDialogOpen(false);
+      addToast(
+        'info',
+        'Account Status Updated',
+        `Member account is now ${nextStatus.toUpperCase()}.`
+      );
+    } catch (err: any) {
+      addToast('error', 'Status Update Failed', err?.message || 'Could not update status');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center gap-3 text-surface-400">
+        <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+        <p className="text-xs">Loading member profile...</p>
+      </div>
+    );
+  }
 
   if (!member) {
     return (
       <div className="py-12 text-center space-y-4">
-        <Users className="h-12 w-12 text-surface-300 mx-auto" />
-        <h2 className="text-lg font-bold text-surface-900">Member Not Found</h2>
-        <p className="text-xs text-surface-500 max-w-sm mx-auto">
+        <Users className="h-12 w-12 text-surface-300 dark:text-slate-600 mx-auto" />
+        <h2 className="text-lg font-bold text-surface-900 dark:text-white">Member Not Found</h2>
+        <p className="text-xs text-surface-500 dark:text-slate-400 max-w-sm mx-auto">
           The member profile does not exist in the cooperative directory.
         </p>
         <Link href="/admin/members" className="btn-primary text-xs inline-flex">
@@ -75,28 +207,6 @@ export default function AdminMemberDetailPage({ params }: PageProps) {
       </div>
     );
   }
-
-  const savings = getMemberSavings(member.id);
-  const memberContribs = contributions.filter((c) => c.memberId === member.id);
-  const memberLoans = loans.filter((l) => l.memberId === member.id);
-  const memberApplications = loanApplications.filter((la) => la.memberId === member.id);
-  const memberTxns = transactions.filter((t) => t.memberId === member.id);
-
-  const activeLoanPrincipal = memberLoans
-    .filter((l) => l.status === 'disbursed' || l.status === 'repaying')
-    .reduce((sum, l) => sum + l.outstandingPrincipal, 0);
-
-  const handleToggleStatus = () => {
-    const nextStatus: AccountStatus = currentStatus === 'active' ? 'suspended' : 'active';
-    setCurrentStatus(nextStatus);
-    member.status = nextStatus;
-    setSuspendDialogOpen(false);
-    addToast(
-      'info',
-      'Account Status Updated',
-      `Member account is now ${nextStatus.toUpperCase()}.`
-    );
-  };
 
   return (
     <div className="space-y-6">
@@ -110,325 +220,236 @@ export default function AdminMemberDetailPage({ params }: PageProps) {
             <Avatar name={member.fullName} size="md" />
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-surface-900">{member.fullName}</h1>
-                <StatusBadge status={currentStatus} />
+                <h1 className="text-xl font-bold text-surface-900 dark:text-white">{member.fullName}</h1>
+                <StatusBadge status={member.status} />
               </div>
-              <p className="font-mono text-xs text-brand-900 font-semibold mt-0.5">
+              <p className="font-mono text-xs text-brand-900 dark:text-emerald-400 font-semibold mt-0.5">
                 {member.memberRef} • {member.email}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Status action button */}
-        <button
-          onClick={() => setSuspendDialogOpen(true)}
-          className={currentStatus === 'active' ? 'btn-danger text-xs' : 'btn-accent text-xs'}
-        >
-          {currentStatus === 'active' ? 'Suspend Account' : 'Reactivate Account'}
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setSuspendDialogOpen(true)}
+            className={member.status === 'active' ? 'btn-danger text-xs' : 'btn-primary text-xs'}
+          >
+            {member.status === 'active' ? 'Suspend Account' : 'Reactivate Account'}
+          </button>
+        </div>
       </div>
 
-      {/* Financial Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Financial Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <StatCard
           title="Regular Savings"
-          value={formatCurrency(savings.regularSavings)}
+          value={formatCurrency(member.regularSavings)}
           subtitle="Non-withdrawable equity"
-          icon={<PiggyBank className="h-5 w-5 text-brand-900" />}
+          icon={<PiggyBank className="h-5 w-5 text-brand-800 dark:text-sky-400" />}
         />
         <StatCard
           title="Special Savings"
-          value={formatCurrency(savings.specialSavings)}
-          subtitle="Interest-free withdrawable"
-          icon={<Sparkles className="h-5 w-5 text-emerald-600" />}
+          value={formatCurrency(member.specialSavings)}
+          subtitle="Voluntary flex balance"
+          icon={<Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
         />
         <StatCard
-          title="Total Member Savings"
-          value={formatCurrency(savings.totalSavings)}
-          subtitle="Approved net ledger balance"
-          icon={<CheckCircle className="h-5 w-5 text-brand-700" />}
+          title="Total Savings"
+          value={formatCurrency(member.totalSavings)}
+          subtitle="Combined capital"
+          icon={<CheckCircle className="h-5 w-5 text-teal-600 dark:text-teal-400" />}
         />
         <StatCard
-          title="Outstanding Loan Principal"
-          value={formatCurrency(activeLoanPrincipal)}
-          subtitle={activeLoanPrincipal > 0 ? 'Active cooperative debt' : 'Zero outstanding debt'}
-          icon={<Landmark className="h-5 w-5 text-amber-600" />}
-          className={activeLoanPrincipal > 0 ? 'border-amber-200' : ''}
+          title="Outstanding Loan"
+          value={formatCurrency(member.outstandingPrincipal)}
+          subtitle="Active amortization"
+          icon={<Landmark className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
+          className={member.outstandingPrincipal > 0 ? 'border-amber-200 dark:border-amber-900/60' : ''}
         />
       </div>
 
       {/* Tabs */}
       <Tabs
-        activeTab={activeTab}
-        onChange={(v) => setActiveTab(v as typeof activeTab)}
         tabs={[
-          { label: 'Member Profile Overview', value: 'overview' },
-          { label: 'Contributions', value: 'contributions', count: memberContribs.length },
-          { label: 'Loans & Applications', value: 'loans', count: memberLoans.length + memberApplications.length },
-          { label: 'Ledger Transactions', value: 'transactions', count: memberTxns.length },
+          { id: 'overview', label: 'Member Overview' },
+          { id: 'contributions', label: `Contributions (${memberContribs.length})` },
+          { id: 'loans', label: `Loans (${memberLoans.length})` },
+          { id: 'transactions', label: `Transactions (${memberTxns.length})` },
         ]}
+        activeTab={activeTab}
+        onChange={(t) => setActiveTab(t as any)}
       />
 
-      {/* TAB 1: OVERVIEW */}
+      {/* Tab Content */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 card p-6 space-y-4">
-            <h3 className="text-sm font-bold text-surface-900 pb-2 border-b border-surface-200">
-              Personal & Membership Records
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div>
-                <span className="text-surface-400 block text-[11px]">Official Full Name</span>
-                <span className="font-semibold text-surface-900">{member.fullName}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="space-y-4">
+            <h3 className="text-sm font-bold text-surface-900 dark:text-white">Contact & Account Details</h3>
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between py-2 border-b border-surface-100 dark:border-darkSurface-border">
+                <span className="text-surface-500 dark:text-slate-400">Official Full Name</span>
+                <span className="font-semibold text-surface-900 dark:text-white">{member.fullName}</span>
               </div>
-              <div>
-                <span className="text-surface-400 block text-[11px]">Member Reference ID</span>
-                <span className="font-mono font-semibold text-surface-900">{member.memberRef}</span>
+              <div className="flex items-center justify-between py-2 border-b border-surface-100 dark:border-darkSurface-border">
+                <span className="text-surface-500 dark:text-slate-400">Email Address</span>
+                <span className="font-semibold text-surface-900 dark:text-white">{member.email}</span>
               </div>
-              <div>
-                <span className="text-surface-400 block text-[11px]">Primary Email</span>
-                <span className="text-surface-700">{member.email}</span>
+              <div className="flex items-center justify-between py-2 border-b border-surface-100 dark:border-darkSurface-border">
+                <span className="text-surface-500 dark:text-slate-400">Phone Number</span>
+                <span className="font-mono font-semibold text-surface-900 dark:text-white">{member.phone}</span>
               </div>
-              <div>
-                <span className="text-surface-400 block text-[11px]">Contact Phone</span>
-                <span className="font-mono text-surface-700">{member.phone}</span>
+              <div className="flex items-center justify-between py-2 border-b border-surface-100 dark:border-darkSurface-border">
+                <span className="text-surface-500 dark:text-slate-400">Member Reference</span>
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{member.memberRef}</span>
               </div>
-              <div>
-                <span className="text-surface-400 block text-[11px]">Registration Date</span>
-                <span className="text-surface-700">{formatDateTime(member.createdAt)}</span>
-              </div>
-              <div>
-                <span className="text-surface-400 block text-[11px]">Assigned Role</span>
-                <span className="font-semibold uppercase tracking-wider text-brand-900">
-                  {member.role}
-                </span>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-surface-500 dark:text-slate-400">Registration Date</span>
+                <span className="font-semibold text-surface-900 dark:text-white">{formatDate(member.createdAt)}</span>
               </div>
             </div>
+          </Card>
 
-            <div className="pt-3 border-t border-surface-200/60">
-              <span className="text-[11px] text-surface-400 block">Cooperative Standing</span>
-              <p className="text-xs text-surface-600 mt-1 leading-relaxed bg-surface-50 p-3 rounded-lg border border-surface-200">
-                {currentStatus === 'active'
-                  ? 'Account is active in good standing. Member has verified contribution records and is eligible for cooperative services according to savings history.'
-                  : 'Account is currently suspended. Submissions and withdrawal privileges are restricted until reactivated by an executive administrator.'}
-              </p>
+          <Card className="space-y-4">
+            <h3 className="text-sm font-bold text-surface-900 dark:text-white">Account Standing & Audit</h3>
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between py-2 border-b border-surface-100 dark:border-darkSurface-border">
+                <span className="text-surface-500 dark:text-slate-400">Membership Role</span>
+                <span className="uppercase font-bold text-emerald-600 dark:text-emerald-400">{member.role}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-surface-100 dark:border-darkSurface-border">
+                <span className="text-surface-500 dark:text-slate-400">Account Standing</span>
+                <StatusBadge status={member.status} />
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-surface-100 dark:border-darkSurface-border">
+                <span className="text-surface-500 dark:text-slate-400">Total Approved Contributions</span>
+                <span className="font-semibold text-surface-900 dark:text-white">{memberContribs.length} submissions</span>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-surface-500 dark:text-slate-400">Active Loan Facilities</span>
+                <span className="font-semibold text-surface-900 dark:text-white">{memberLoans.length} records</span>
+              </div>
             </div>
-          </div>
-
-          <div className="card p-6 space-y-4">
-            <h3 className="text-sm font-bold text-surface-900 pb-2 border-b border-surface-200">
-              Administrative Safeguards
-            </h3>
-            <div className="space-y-3 text-xs text-surface-600 leading-relaxed">
-              <p className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900">
-                <strong>Immutable Fields:</strong> Member identity references and historical balances
-                are derived from posted ledger transactions. Ordinary CRUD updates to ledger records
-                are strictly blocked.
-              </p>
-              <p className="p-3 bg-surface-100 border border-surface-200 rounded-lg">
-                <strong>Audit Trail:</strong> Any status modifications or adjustments to this profile
-                will be permanently logged in the cooperative audit journal.
-              </p>
-            </div>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* TAB 2: CONTRIBUTIONS */}
       {activeTab === 'contributions' && (
         <Card padding="none">
-          <div className="p-4 border-b border-surface-200">
-            <h3 className="text-sm font-bold text-surface-900">Member Contribution Submissions</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-surface-200 bg-surface-50/50">
-                  <th className="table-header">Reference</th>
-                  <th className="table-header">Type</th>
-                  <th className="table-header">Amount</th>
-                  <th className="table-header">Payment Date</th>
-                  <th className="table-header">Transfer Ref</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header text-right">Review</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-100">
-                {memberContribs.map((c) => (
-                  <tr key={c.id} className="hover:bg-surface-50/70 text-xs">
-                    <td className="table-cell font-mono font-semibold text-surface-900">{c.ref}</td>
-                    <td className="table-cell capitalize">{c.type} Savings</td>
-                    <td className="table-cell font-bold text-surface-900">{formatCurrency(c.amount)}</td>
-                    <td className="table-cell text-surface-600">{formatDate(c.paymentDate)}</td>
-                    <td className="table-cell font-mono text-surface-600">{c.transferReference}</td>
-                    <td className="table-cell">
-                      <StatusBadge status={c.status} />
-                    </td>
-                    <td className="table-cell text-right">
-                      <Link
-                        href={`/admin/contributions/${c.id}`}
-                        className="btn-secondary text-xs px-2.5 py-1"
-                      >
-                        Inspect
-                      </Link>
-                    </td>
+          {memberContribs.length === 0 ? (
+            <div className="py-12 text-center text-xs text-surface-400">No contributions recorded for this member.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-surface-200 dark:border-darkSurface-border bg-surface-50/50 dark:bg-darkSurface-bg/50">
+                    <th className="table-header">Reference</th>
+                    <th className="table-header">Type</th>
+                    <th className="table-header">Amount</th>
+                    <th className="table-header">Payment Date</th>
+                    <th className="table-header">Bank Reference</th>
+                    <th className="table-header">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-surface-100 dark:divide-darkSurface-border text-xs">
+                  {memberContribs.map((c) => (
+                    <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-darkSurface-hover">
+                      <td className="table-cell font-mono font-semibold">{c.ref}</td>
+                      <td className="table-cell capitalize">{c.type}</td>
+                      <td className="table-cell font-bold">{formatCurrency(c.amount)}</td>
+                      <td className="table-cell">{formatDate(c.paymentDate)}</td>
+                      <td className="table-cell font-mono text-surface-500">{c.transferReference}</td>
+                      <td className="table-cell"><StatusBadge status={c.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
 
-      {/* TAB 3: LOANS */}
       {activeTab === 'loans' && (
-        <div className="space-y-6">
-          <Card padding="none">
-            <div className="p-4 border-b border-surface-200">
-              <h3 className="text-sm font-bold text-surface-900">Active & Settled Loans</h3>
-            </div>
-            {memberLoans.length === 0 ? (
-              <div className="p-8 text-center text-xs text-surface-400">
-                No active or past loans on record for this member.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-surface-200 bg-surface-50/50">
-                      <th className="table-header">Loan Ref</th>
-                      <th className="table-header">Disbursed Principal</th>
-                      <th className="table-header">Outstanding</th>
-                      <th className="table-header">Disbursed Date</th>
-                      <th className="table-header">Status</th>
-                      <th className="table-header text-right">Action</th>
+        <Card padding="none">
+          {memberLoans.length === 0 ? (
+            <div className="py-12 text-center text-xs text-surface-400">No loan records for this member.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-surface-200 dark:border-darkSurface-border bg-surface-50/50 dark:bg-darkSurface-bg/50">
+                    <th className="table-header">Reference</th>
+                    <th className="table-header">Purpose</th>
+                    <th className="table-header">Disbursed Principal</th>
+                    <th className="table-header">Outstanding</th>
+                    <th className="table-header">Date</th>
+                    <th className="table-header">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-100 dark:divide-darkSurface-border text-xs">
+                  {memberLoans.map((l) => (
+                    <tr key={l.id} className="hover:bg-slate-50 dark:hover:bg-darkSurface-hover">
+                      <td className="table-cell font-mono font-semibold">{l.ref}</td>
+                      <td className="table-cell">{l.purpose}</td>
+                      <td className="table-cell font-bold">{formatCurrency(l.disbursedAmount)}</td>
+                      <td className="table-cell font-bold text-amber-600">{formatCurrency(l.outstandingPrincipal)}</td>
+                      <td className="table-cell">{formatDate(l.approvedDate)}</td>
+                      <td className="table-cell"><StatusBadge status={l.status} /></td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-100">
-                    {memberLoans.map((l) => (
-                      <tr key={l.id}>
-                        <td className="table-cell font-mono font-semibold text-surface-900">{l.ref}</td>
-                        <td className="table-cell font-bold">{formatCurrency(l.disbursedAmount)}</td>
-                        <td className="table-cell font-bold text-amber-700">
-                          {formatCurrency(l.outstandingPrincipal)}
-                        </td>
-                        <td className="table-cell text-surface-600">
-                          {l.disbursementDate ? formatDate(l.disbursementDate) : 'Pending'}
-                        </td>
-                        <td className="table-cell">
-                          <StatusBadge status={l.status} />
-                        </td>
-                        <td className="table-cell text-right">
-                          <Link href={`/admin/loans/${l.id}`} className="btn-secondary text-xs px-2.5 py-1">
-                            Details
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-
-          <Card padding="none">
-            <div className="p-4 border-b border-surface-200">
-              <h3 className="text-sm font-bold text-surface-900">Loan Applications History</h3>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            {memberApplications.length === 0 ? (
-              <div className="p-8 text-center text-xs text-surface-400">
-                No loan applications filed.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-surface-200 bg-surface-50/50">
-                      <th className="table-header">Application Ref</th>
-                      <th className="table-header">Date</th>
-                      <th className="table-header">Requested</th>
-                      <th className="table-header">Duration</th>
-                      <th className="table-header">Purpose</th>
-                      <th className="table-header">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-100">
-                    {memberApplications.map((app) => (
-                      <tr key={app.id}>
-                        <td className="table-cell font-mono font-semibold text-surface-900">{app.ref}</td>
-                        <td className="table-cell text-surface-600">{formatDate(app.applicationDate)}</td>
-                        <td className="table-cell font-bold">{formatCurrency(app.requestedAmount)}</td>
-                        <td className="table-cell text-surface-600">{app.repaymentDuration} months</td>
-                        <td className="table-cell text-surface-700 max-w-xs truncate">{app.purpose}</td>
-                        <td className="table-cell">
-                          <StatusBadge status={app.status} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-        </div>
+          )}
+        </Card>
       )}
 
-      {/* TAB 4: TRANSACTIONS */}
       {activeTab === 'transactions' && (
         <Card padding="none">
-          <div className="p-4 border-b border-surface-200">
-            <h3 className="text-sm font-bold text-surface-900">Immutable Ledger Entries</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-surface-200 bg-surface-50/50">
-                  <th className="table-header">Reference</th>
-                  <th className="table-header">Date</th>
-                  <th className="table-header">Description</th>
-                  <th className="table-header">Category</th>
-                  <th className="table-header">Credit (+)</th>
-                  <th className="table-header">Debit (-)</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-100">
-                {memberTxns.map((t) => (
-                  <tr key={t.id} className="hover:bg-surface-50/70">
-                    <td className="table-cell font-mono font-semibold text-surface-900">{t.ref}</td>
-                    <td className="table-cell text-surface-600">{formatDate(t.date)}</td>
-                    <td className="table-cell text-surface-800 font-medium">{t.description}</td>
-                    <td className="table-cell capitalize">{t.category.replace('_', ' ')}</td>
-                    <td className="table-cell font-bold text-emerald-700">
-                      {t.credit > 0 ? `+${formatCurrency(t.credit)}` : '—'}
-                    </td>
-                    <td className="table-cell font-bold text-surface-900">
-                      {t.debit > 0 ? `-${formatCurrency(t.debit)}` : '—'}
-                    </td>
-                    <td className="table-cell">
-                      <Badge variant="success">Posted</Badge>
-                    </td>
+          {memberTxns.length === 0 ? (
+            <div className="py-12 text-center text-xs text-surface-400">No ledger transactions posted for this member.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-surface-200 dark:border-darkSurface-border bg-surface-50/50 dark:bg-darkSurface-bg/50">
+                    <th className="table-header">Reference</th>
+                    <th className="table-header">Description</th>
+                    <th className="table-header">Category</th>
+                    <th className="table-header">Credit (+)</th>
+                    <th className="table-header">Debit (-)</th>
+                    <th className="table-header">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-surface-100 dark:divide-darkSurface-border text-xs">
+                  {memberTxns.map((t) => (
+                    <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-darkSurface-hover">
+                      <td className="table-cell font-mono font-semibold">{t.ref}</td>
+                      <td className="table-cell">{t.description}</td>
+                      <td className="table-cell capitalize">{t.category.replace('_', ' ')}</td>
+                      <td className="table-cell font-bold text-emerald-600">{t.credit > 0 ? `+${formatCurrency(t.credit)}` : '—'}</td>
+                      <td className="table-cell font-bold text-slate-800 dark:text-slate-200">{t.debit > 0 ? `-${formatCurrency(t.debit)}` : '—'}</td>
+                      <td className="table-cell">{formatDate(t.postingDate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
 
-      {/* CONFIRM STATUS TOGGLE DIALOG */}
+      {/* Suspend confirmation dialog */}
       <ConfirmDialog
         open={suspendDialogOpen}
-        title={currentStatus === 'active' ? 'Suspend Member Account?' : 'Reactivate Member Account?'}
+        title={member.status === 'active' ? 'Suspend Member Account' : 'Reactivate Member Account'}
         message={
-          currentStatus === 'active'
-            ? `Suspending ${member.fullName}'s account will block new contribution submissions, loan requests, and withdrawals. Existing ledger balances remain intact.`
-            : `Reactivating ${member.fullName}'s account will restore normal member permissions and portal access.`
+          member.status === 'active'
+            ? `Are you sure you want to suspend ${member.fullName}? Suspended members cannot submit new loan requests or payment proofs.`
+            : `Reactivate ${member.fullName}'s account to restore full cooperative privileges?`
         }
-        confirmLabel={currentStatus === 'active' ? 'Confirm Suspension' : 'Reactivate Account'}
-        variant={currentStatus === 'active' ? 'danger' : 'accent'}
+        confirmLabel={member.status === 'active' ? 'Suspend Account' : 'Reactivate'}
+        variant={member.status === 'active' ? 'danger' : 'primary'}
         onConfirm={handleToggleStatus}
         onCancel={() => setSuspendDialogOpen(false)}
       />

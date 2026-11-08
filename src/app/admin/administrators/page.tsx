@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Shield,
@@ -14,7 +14,6 @@ import {
   Loader2,
   Calendar,
 } from 'lucide-react';
-import { admins, currentAdmin } from '@/lib/mock-data';
 import {
   Card,
   StatCard,
@@ -26,85 +25,135 @@ import {
 } from '@/components/ui/shared';
 import { formatDate, formatDateTime, validateEmail } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
-import type { User, AccountStatus } from '@/lib/types';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
+import type { AccountStatus } from '@/lib/types';
 
 export default function AdminManagementPage() {
+  const { user } = useAuth();
   const { addToast } = useToast();
 
-  const [adminList, setAdminList] = useState<User[]>(admins);
+  const [adminList, setAdminList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
-  const [newAdminName, setNewAdminName] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
-  const [newAdminPhone, setNewAdminPhone] = useState('');
   const [inviting, setInviting] = useState(false);
 
   // Status toggle
-  const [selectedAdmin, setSelectedAdmin] = useState<User | null>(null);
+  const [selectedAdmin, setSelectedAdmin] = useState<any | null>(null);
   const [confirmToggleOpen, setConfirmToggleOpen] = useState(false);
 
-  const handleInviteAdmin = (e: React.FormEvent) => {
-    e.preventDefault();
+  const loadAdmins = async () => {
+    if (!user) return;
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'admin')
+        .order('created_at', { ascending: false });
 
-    if (!newAdminName.trim()) {
-      addToast('error', 'Name Required', 'Please enter administrator full name.');
-      return;
+      if (data && !error) {
+        setAdminList(
+          data.map((a) => ({
+            id: a.id,
+            email: a.email,
+            fullName: a.full_name,
+            phone: a.phone || 'N/A',
+            role: a.role,
+            memberRef: a.member_ref || 'ADM',
+            status: a.status || 'active',
+            createdAt: a.created_at,
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Error loading admins:', err);
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
+    loadAdmins();
+  }, [user]);
+
+  const handlePromoteAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!validateEmail(newAdminEmail)) {
-      addToast('error', 'Invalid Email', 'Please provide a valid work email address.');
+      addToast('error', 'Invalid Email', 'Please provide a valid registered member email address.');
       return;
     }
 
     setInviting(true);
+    try {
+      const supabase = createClient();
+      // Look up member profile by email
+      const { data: memberProfile, error: findError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', newAdminEmail.trim().toLowerCase())
+        .maybeSingle();
 
-    setTimeout(() => {
-      const newAdmin: User = {
-        id: `adm_${Date.now()}`,
-        email: newAdminEmail.trim().toLowerCase(),
-        fullName: newAdminName.trim(),
-        phone: newAdminPhone.trim() || '+234 800 000 0000',
-        role: 'admin',
-        memberRef: `DBA-000${adminList.length + 1}`,
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      if (findError || !memberProfile) {
+        addToast(
+          'error',
+          'Member Not Found',
+          'No account with that email was found. The user must register first before being elevated to administrator.'
+        );
+        return;
+      }
 
-      setAdminList((prev) => [...prev, newAdmin]);
-      setInviting(false);
-      setInviteModalOpen(false);
-      setNewAdminName('');
-      setNewAdminEmail('');
-      setNewAdminPhone('');
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ role: 'admin', updated_at: new Date().toISOString() })
+        .eq('id', memberProfile.id);
+
+      if (updateError) throw updateError;
 
       addToast(
         'success',
-        'Administrator Provisioned',
-        `Invitation and secure role provisioning dispatched to ${newAdmin.email}.`
+        'Administrator Elevated',
+        `${memberProfile.full_name} (${newAdminEmail}) is now an administrator.`
       );
-    }, 1500);
+      setInviteModalOpen(false);
+      setNewAdminEmail('');
+      await loadAdmins();
+    } catch (err: any) {
+      addToast('error', 'Action Failed', err?.message || 'Could not promote administrator');
+    } finally {
+      setInviting(false);
+    }
   };
 
-  const handleToggleAdminStatus = () => {
+  const handleToggleAdminStatus = async () => {
     if (!selectedAdmin) return;
-
-    if (selectedAdmin.id === currentAdmin.id) {
+    if (selectedAdmin.id === user?.id) {
       addToast('error', 'Action Restricted', 'You cannot suspend your own active administrator session.');
       setConfirmToggleOpen(false);
       return;
     }
 
     const nextStatus: AccountStatus = selectedAdmin.status === 'active' ? 'suspended' : 'active';
-    selectedAdmin.status = nextStatus;
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: nextStatus, updated_at: new Date().toISOString() })
+        .eq('id', selectedAdmin.id);
 
-    setAdminList([...adminList]);
-    setConfirmToggleOpen(false);
+      if (error) throw error;
 
-    addToast(
-      'info',
-      'Administrator Status Changed',
-      `${selectedAdmin.fullName}'s administrative access is now ${nextStatus.toUpperCase()}.`
-    );
+      addToast(
+        'info',
+        'Status Changed',
+        `${selectedAdmin.fullName}'s administrative access is now ${nextStatus.toUpperCase()}.`
+      );
+      setConfirmToggleOpen(false);
+      await loadAdmins();
+    } catch (err: any) {
+      addToast('error', 'Action Failed', err?.message || 'Could not update status');
+    }
   };
 
   return (
@@ -115,10 +164,10 @@ export default function AdminManagementPage() {
         actions={
           <button
             onClick={() => setInviteModalOpen(true)}
-            className="btn-primary text-xs flex items-center gap-2"
+            className="btn-primary text-xs flex items-center gap-2 shadow-sm"
           >
             <UserPlus className="h-4 w-4" />
-            Provision Administrator
+            Promote Member to Admin
           </button>
         }
       />
@@ -129,8 +178,7 @@ export default function AdminManagementPage() {
         <div className="text-xs text-slate-300 leading-relaxed">
           <strong className="text-white">Strict Role Governance:</strong> Ordinary members cannot
           create or elevate accounts to administrator status. Role assignment occurs strictly via
-          trusted server-side auth procedures (`app_metadata.role`). The Supabase service-role key is
-          never exposed in client code.
+          privileged database rules. The Supabase service-role key is never exposed in client code.
         </div>
       </div>
 
@@ -140,165 +188,128 @@ export default function AdminManagementPage() {
           title="Active Administrators"
           value={adminList.filter((a) => a.status === 'active').length.toString()}
           subtitle="Authorized operators"
-          icon={<UserCheck className="h-5 w-5 text-emerald-600" />}
+          icon={<UserCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
         />
         <StatCard
           title="Suspended Accounts"
           value={adminList.filter((a) => a.status === 'suspended').length.toString()}
           subtitle="Revoked permissions"
-          icon={<UserX className="h-5 w-5 text-red-600" />}
+          icon={<UserX className="h-5 w-5 text-red-600 dark:text-red-400" />}
         />
         <StatCard
           title="Dual-Role Separation"
           value="Enforced"
           subtitle="Member & Admin isolated"
-          icon={<Shield className="h-5 w-5 text-brand-900" />}
+          icon={<Shield className="h-5 w-5 text-brand-900 dark:text-sky-400" />}
         />
       </div>
 
       {/* Administrators Table */}
       <Card padding="none">
-        <div className="p-4 sm:p-5 border-b border-surface-200 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-surface-200 dark:border-darkSurface-border flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-surface-900">Administrator Register</h3>
-            <p className="text-xs text-surface-500">Authorized cooperative officers and system managers</p>
+            <h3 className="text-sm font-bold text-surface-900 dark:text-white">Administrator Register</h3>
+            <p className="text-xs text-surface-500 dark:text-slate-400">Authorized cooperative officers and system managers</p>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-surface-200 bg-surface-50/50">
-                <th className="table-header">Admin ID</th>
-                <th className="table-header">Full Name & Email</th>
-                <th className="table-header">Phone</th>
-                <th className="table-header">Assigned Role</th>
-                <th className="table-header">Date Added</th>
-                <th className="table-header">Access Status</th>
-                <th className="table-header text-right">Access Controls</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-100">
-              {adminList.map((adm) => (
-                <tr key={adm.id} className="hover:bg-surface-50/70 transition-colors">
-                  <td className="table-cell font-mono font-bold text-surface-900">{adm.memberRef}</td>
-                  <td className="table-cell">
-                    <div className="flex items-center gap-2.5">
-                      <Avatar name={adm.fullName} size="sm" className="bg-emerald-700 text-white" />
-                      <div>
-                        <p className="font-semibold text-surface-900 leading-tight">
-                          {adm.fullName}
-                          {adm.id === currentAdmin.id && (
-                            <span className="ml-1.5 text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-mono">
-                              (You)
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[11px] text-surface-400 leading-tight">{adm.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="table-cell font-mono text-surface-600">{adm.phone}</td>
-                  <td className="table-cell">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-white uppercase tracking-wider">
-                      Administrator
-                    </span>
-                  </td>
-                  <td className="table-cell text-surface-600">{formatDate(adm.createdAt)}</td>
-                  <td className="table-cell">
-                    <StatusBadge status={adm.status} />
-                  </td>
-                  <td className="table-cell text-right">
-                    {adm.id !== currentAdmin.id ? (
-                      <button
-                        onClick={() => {
-                          setSelectedAdmin(adm);
-                          setConfirmToggleOpen(true);
-                        }}
-                        className={`text-xs px-2.5 py-1 rounded font-medium ${
-                          adm.status === 'active'
-                            ? 'text-red-700 hover:bg-red-50'
-                            : 'text-emerald-700 hover:bg-emerald-50'
-                        }`}
-                      >
-                        {adm.status === 'active' ? 'Suspend Access' : 'Reactivate'}
-                      </button>
-                    ) : (
-                      <span className="text-surface-400 italic text-[11px]">Active Session</span>
-                    )}
-                  </td>
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-3 text-surface-400">
+            <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+            <p className="text-xs">Loading administrator register...</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-surface-200 dark:border-darkSurface-border bg-surface-50/50 dark:bg-darkSurface-bg/50">
+                  <th className="table-header">Admin ID</th>
+                  <th className="table-header">Full Name & Email</th>
+                  <th className="table-header">Phone</th>
+                  <th className="table-header">Assigned Role</th>
+                  <th className="table-header">Date Added</th>
+                  <th className="table-header">Access Status</th>
+                  <th className="table-header text-right">Access Controls</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-surface-100 dark:divide-darkSurface-border">
+                {adminList.map((adm) => (
+                  <tr key={adm.id} className="hover:bg-slate-50 dark:hover:bg-darkSurface-hover transition-colors">
+                    <td className="table-cell font-mono font-bold text-surface-900 dark:text-white">{adm.memberRef}</td>
+                    <td className="table-cell">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar name={adm.fullName} size="sm" className="bg-emerald-700 text-white" />
+                        <div>
+                          <p className="font-semibold text-surface-900 dark:text-white leading-tight">
+                            {adm.fullName}
+                            {adm.id === user?.id && (
+                              <span className="ml-1.5 text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded font-mono">
+                                (You)
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-surface-400 dark:text-slate-400 leading-tight">{adm.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="table-cell font-mono text-surface-600 dark:text-slate-300">{adm.phone}</td>
+                    <td className="table-cell uppercase font-bold text-[10px] text-emerald-700 dark:text-emerald-400">
+                      {adm.role}
+                    </td>
+                    <td className="table-cell text-surface-500 dark:text-slate-400">{formatDate(adm.createdAt)}</td>
+                    <td className="table-cell"><StatusBadge status={adm.status} /></td>
+                    <td className="table-cell text-right">
+                      {adm.id !== user?.id && (
+                        <button
+                          onClick={() => {
+                            setSelectedAdmin(adm);
+                            setConfirmToggleOpen(true);
+                          }}
+                          className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                            adm.status === 'active'
+                              ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40'
+                              : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                          }`}
+                        >
+                          {adm.status === 'active' ? 'Suspend' : 'Reactivate'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
-      {/* PROVISION ADMINISTRATOR MODAL */}
+      {/* Promote Modal */}
       {inviteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => !inviting && setInviteModalOpen(false)}
           />
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-modal border border-surface-200">
-            <h3 className="text-lg font-bold text-surface-900">Provision Administrator Account</h3>
-            <p className="text-xs text-surface-500 mt-1">
-              Add an authorized officer to manage member verification and disbursements.
+          <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-darkSurface-card p-6 shadow-modal border border-surface-200 dark:border-darkSurface-border">
+            <h3 className="text-base font-bold text-surface-900 dark:text-white">Promote Member to Administrator</h3>
+            <p className="text-xs text-surface-500 dark:text-slate-400 mt-1 leading-relaxed">
+              Enter the registered email of an existing member to grant full administrator access to this console.
             </p>
 
-            <form onSubmit={handleInviteAdmin} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={handlePromoteAdmin} className="space-y-4 mt-4">
               <div>
-                <label htmlFor="admName" className="label text-xs">
-                  Full Name
-                </label>
+                <label className="label text-xs">Registered Member Email</label>
                 <input
-                  id="admName"
-                  type="text"
-                  value={newAdminName}
-                  onChange={(e) => setNewAdminName(e.target.value)}
-                  placeholder="e.g. Samuel Adebayo"
-                  required
-                  className="input-field text-xs"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="admEmail" className="label text-xs">
-                  Official Email Address
-                </label>
-                <input
-                  id="admEmail"
                   type="email"
                   value={newAdminEmail}
                   onChange={(e) => setNewAdminEmail(e.target.value)}
-                  placeholder="samuel@deblossom.coop"
+                  placeholder="e.g. member@email.com"
                   required
                   className="input-field text-xs"
                 />
               </div>
 
-              <div>
-                <label htmlFor="admPhone" className="label text-xs">
-                  Phone Number
-                </label>
-                <input
-                  id="admPhone"
-                  type="tel"
-                  value={newAdminPhone}
-                  onChange={(e) => setNewAdminPhone(e.target.value)}
-                  placeholder="+234 802 xxx xxxx"
-                  className="input-field text-xs"
-                />
-              </div>
-
-              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-[11px] text-blue-900 leading-relaxed">
-                <strong>Server-Side Workflow:</strong> Account credentials and administrative claims
-                (`app_metadata.role: &quot;admin&quot;`) are generated through trusted server-side Auth
-                provisioning.
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-surface-200">
+              <div className="flex items-center justify-end gap-2.5 pt-2">
                 <button
                   type="button"
                   disabled={inviting}
@@ -312,14 +323,8 @@ export default function AdminManagementPage() {
                   disabled={inviting}
                   className="btn-primary text-xs inline-flex items-center gap-1.5"
                 >
-                  {inviting ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Provisioning...
-                    </>
-                  ) : (
-                    'Provision Administrator'
-                  )}
+                  {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                  Promote to Admin
                 </button>
               </div>
             </form>
@@ -327,24 +332,19 @@ export default function AdminManagementPage() {
         </div>
       )}
 
-      {/* CONFIRM STATUS TOGGLE DIALOG */}
+      {/* Status Toggle Confirm */}
       {selectedAdmin && (
         <ConfirmDialog
           open={confirmToggleOpen}
-          title={
-            selectedAdmin.status === 'active'
-              ? `Suspend ${selectedAdmin.fullName}?`
-              : `Reactivate ${selectedAdmin.fullName}?`
-          }
-          message={
-            selectedAdmin.status === 'active'
-              ? 'This will immediately revoke their administrative console access and verification permissions.'
-              : 'This will restore their full administrative privileges.'
-          }
-          confirmLabel={selectedAdmin.status === 'active' ? 'Suspend Access' : 'Restore Access'}
-          variant={selectedAdmin.status === 'active' ? 'danger' : 'accent'}
+          title={selectedAdmin.status === 'active' ? 'Suspend Administrator' : 'Reactivate Administrator'}
+          message={`Are you sure you want to ${selectedAdmin.status === 'active' ? 'suspend' : 'reactivate'} ${selectedAdmin.fullName}?`}
+          confirmLabel={selectedAdmin.status === 'active' ? 'Suspend Access' : 'Reactivate'}
+          variant={selectedAdmin.status === 'active' ? 'danger' : 'primary'}
           onConfirm={handleToggleAdminStatus}
-          onCancel={() => setConfirmToggleOpen(false)}
+          onCancel={() => {
+            setConfirmToggleOpen(false);
+            setSelectedAdmin(null);
+          }}
         />
       )}
     </div>

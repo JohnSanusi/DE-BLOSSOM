@@ -103,8 +103,7 @@ export async function approveContributionAction(
     // Call atomic stored procedure created in schema.sql
     const { data, error } = await supabase.rpc('approve_contribution', {
       p_contribution_id: contributionId,
-      p_admin_id: user.id,
-      p_notes: adminNotes || 'Verified by admin',
+      p_remarks: adminNotes || 'Verified by admin',
     });
 
     if (error) {
@@ -150,7 +149,6 @@ export async function rejectContributionAction(
 
     const { data, error } = await supabase.rpc('reject_contribution', {
       p_contribution_id: contributionId,
-      p_admin_id: user.id,
       p_reason: reason.trim(),
     });
 

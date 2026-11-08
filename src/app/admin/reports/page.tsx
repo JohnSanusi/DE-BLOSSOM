@@ -15,27 +15,16 @@ import {
   FileSpreadsheet,
   Users,
   DollarSign,
+  Loader2,
 } from 'lucide-react';
-import {
-  contributions,
-  loans,
-  loanApplications,
-  repayments,
-  members,
-  transactions,
-  contributionsOverviewChart,
-  memberGrowthChart,
-  loanActivityChart,
-  getAdminDashboardSummary,
-} from '@/lib/mock-data';
 import { Card, StatCard, PageHeader, Badge, Tabs, InfoTooltip } from '@/components/ui/shared';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 import {
   BarChart,
   Bar,
-  AreaChart,
-  Area,
   PieChart,
   Pie,
   Cell,
@@ -47,34 +36,99 @@ import {
   Legend,
 } from 'recharts';
 
+function getLast6Months() {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const now = new Date();
+  const result = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push({
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      label: months[d.getMonth()],
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+    });
+  }
+  return result;
+}
+
 export default function AdminReportsPage() {
+  const { user } = useAuth();
   const { addToast } = useToast();
   const [mounted, setMounted] = useState(false);
-  const [period, setPeriod] = useState('all');
+  const [loading, setLoading] = useState(true);
+
+  const [liveStats, setLiveStats] = useState<any>(null);
+  const [approvedContribs, setApprovedContribs] = useState<any[]>([]);
+  const [loansList, setLoansList] = useState<any[]>([]);
+  const [repaymentsList, setRepaymentsList] = useState<any[]>([]);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    async function loadReportData() {
+      if (!user) return;
+      try {
+        const supabase = createClient();
+        const [statsRes, contribsRes, loansRes, repaysRes] = await Promise.all([
+          supabase.rpc('get_admin_dashboard_summary'),
+          supabase
+            .from('contributions')
+            .select('amount, type, payment_date, submission_date')
+            .eq('status', 'approved'),
+          supabase
+            .from('loans')
+            .select('principal_amount, disbursed_amount, outstanding_principal, status'),
+          supabase
+            .from('repayments')
+            .select('amount, principal_component, status')
+            .eq('status', 'approved'),
+        ]);
 
-  const summary = getAdminDashboardSummary();
+        if (statsRes.data) setLiveStats(statsRes.data);
+        if (contribsRes.data) setApprovedContribs(contribsRes.data);
+        if (loansRes.data) setLoansList(loansRes.data);
+        if (repaysRes.data) setRepaymentsList(repaysRes.data);
+      } catch (err) {
+        console.error('Error fetching admin reports:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadReportData();
+  }, [user]);
 
-  const totalRegularSavings = summary.totalRegularSavings;
-  const totalSpecialSavings = summary.totalSpecialSavings;
+  const totalMembers = liveStats ? Number(liveStats.total_members || 0) : 0;
+  const totalRegularSavings = liveStats ? Number(liveStats.total_regular_savings || 0) : 0;
+  const totalSpecialSavings = liveStats ? Number(liveStats.total_special_savings || 0) : 0;
   const totalSavingsPortfolio = totalRegularSavings + totalSpecialSavings;
 
-  const totalLoansApproved = loans.reduce((sum, l) => sum + l.principalAmount, 0);
-  const totalLoansDisbursed = loans.reduce((sum, l) => sum + l.disbursedAmount, 0);
-  const totalOutstandingLoanPrincipal = summary.outstandingLoanPrincipal;
+  const totalLoansApproved = loansList.reduce((sum, l) => sum + Number(l.principal_amount || 0), 0);
+  const totalLoansDisbursed = loansList.reduce((sum, l) => sum + Number(l.disbursed_amount || 0), 0);
+  const totalOutstandingLoanPrincipal = liveStats ? Number(liveStats.outstanding_loan_principal || 0) : 0;
+  const approvedRepayments = repaymentsList.reduce((sum, r) => sum + Number(r.principal_component || r.amount || 0), 0);
+  const pendingVerifications = liveStats ? Number(liveStats.pending_contributions_count || 0) : 0;
+  const pendingLoanApps = liveStats ? Number(liveStats.pending_loan_apps_count || 0) : 0;
 
-  const approvedRepayments = repayments
-    .filter((r) => r.status === 'approved')
-    .reduce((sum, r) => sum + r.amount, 0);
-
-  // Pie chart data for savings distribution (light vs dark friendly colors)
+  // Pie chart data
   const savingsPieData = [
     { name: 'Regular Savings', value: totalRegularSavings, color: '#38bdf8' },
     { name: 'Special Savings', value: totalSpecialSavings, color: '#22c55e' },
   ];
+
+  // Dynamic Monthly Approved Contributions Bar Chart
+  const months = getLast6Months();
+  const contributionsOverviewChart = months.map((m) => {
+    let regular = 0;
+    let special = 0;
+    approvedContribs.forEach((c) => {
+      const d = c.payment_date || c.submission_date;
+      if (d && String(d).startsWith(m.key)) {
+        if (c.type === 'regular') regular += Number(c.amount || 0);
+        else special += Number(c.amount || 0);
+      }
+    });
+    return { label: m.label, value: regular, value2: special };
+  });
 
   const handleExportFullReport = () => {
     const reportData = [
@@ -82,7 +136,7 @@ export default function AdminReportsPage() {
       ['Generated at', new Date().toISOString()],
       [''],
       ['FINANCIAL SUMMARY'],
-      ['Total Registered Members', summary.totalMembers],
+      ['Total Registered Members', totalMembers],
       ['Total Approved Regular Savings (NGN)', totalRegularSavings],
       ['Total Approved Special Savings (NGN)', totalSpecialSavings],
       ['Total Member Equity Portfolio (NGN)', totalSavingsPortfolio],
@@ -94,8 +148,8 @@ export default function AdminReportsPage() {
       ['Total Verified Repayments (NGN)', approvedRepayments],
       [''],
       ['VERIFICATION QUEUES'],
-      ['Pending Contributions', summary.pendingVerifications],
-      ['Pending Loan Applications', summary.pendingLoanApplications],
+      ['Pending Contributions', pendingVerifications],
+      ['Pending Loan Applications', pendingLoanApps],
     ];
 
     const csvContent =
@@ -108,44 +162,30 @@ export default function AdminReportsPage() {
     link.click();
     document.body.removeChild(link);
 
-    addToast('success', 'Report Exported', 'Comprehensive cooperative financial summary exported to CSV.');
+    addToast('success', 'Report Exported', 'Executive financial summary downloaded as CSV.');
   };
 
   return (
     <div className="space-y-6">
+      {/* Top Header and Export */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-surface-900 dark:text-white tracking-tight">
-            Financial Reports & Analytics
-          </h1>
-          <p className="text-xs text-surface-500 dark:text-slate-400 mt-0.5">
-            Verified balance reconciliations, credit exposure, and longitudinal portfolio statistics.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="select-field text-xs py-1.5 px-3 w-40"
-          >
-            <option value="all">Cumulative (All Time)</option>
-            <option value="year">Current Fiscal Year</option>
-            <option value="q3">Q3 2024</option>
-          </select>
-
+        <PageHeader
+          title="Financial Reports & Analytics"
+          description="Audited financial summaries, savings equity breakdown, and credit risk exposure metrics."
+        />
+        <div className="flex items-center gap-2.5">
           <button
             onClick={handleExportFullReport}
-            className="btn-primary text-xs flex items-center gap-1.5 py-2 px-3"
+            className="btn-primary text-xs inline-flex items-center gap-2 shadow-sm"
           >
             <Download className="h-4 w-4" />
-            Export Executive Report
+            Export Executive Report (CSV)
           </button>
         </div>
       </div>
 
-      {/* Primary KPI Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Financial Health Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <StatCard
           title="Total Approved Regular Savings"
           value={formatCurrency(totalRegularSavings)}
@@ -276,7 +316,7 @@ export default function AdminReportsPage() {
           </div>
 
           <div className="pt-3 border-t border-surface-100 dark:border-darkSurface-border text-xs text-surface-600 dark:text-slate-300">
-            Pending submissions ({summary.pendingVerifications}) are omitted from ledger balances.
+            Pending submissions ({pendingVerifications}) are omitted from ledger balances.
           </div>
         </div>
       </div>
@@ -294,7 +334,7 @@ export default function AdminReportsPage() {
             <div className="flex justify-between py-1 border-b border-surface-100 dark:border-darkSurface-border">
               <span className="text-surface-700 dark:text-slate-200">Approved Contributions:</span>
               <span className="font-bold text-surface-900 dark:text-white">
-                {formatCurrency(summary.totalApprovedContributions)}
+                {formatCurrency(totalSavingsPortfolio)}
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-surface-100 dark:border-darkSurface-border">
@@ -313,7 +353,7 @@ export default function AdminReportsPage() {
               <span className="font-semibold text-surface-800 dark:text-slate-100">Net Society Capital:</span>
               <span className="font-bold text-base text-brand-900 dark:text-emerald-400">
                 {formatCurrency(
-                  summary.totalApprovedContributions - totalLoansDisbursed + approvedRepayments
+                  totalSavingsPortfolio - totalLoansDisbursed + approvedRepayments
                 )}
               </span>
             </div>
@@ -349,7 +389,9 @@ export default function AdminReportsPage() {
             <div className="flex justify-between pt-1">
               <span className="font-semibold text-surface-800 dark:text-slate-100">Recovery Rate:</span>
               <span className="font-bold text-surface-900 dark:text-white">
-                {Math.round((approvedRepayments / (totalLoansDisbursed || 1)) * 100)}%
+                {totalLoansDisbursed > 0
+                  ? `${((approvedRepayments / totalLoansDisbursed) * 100).toFixed(1)}%`
+                  : 'N/A (No Loans Disbursed)'}
               </span>
             </div>
           </div>
@@ -358,30 +400,28 @@ export default function AdminReportsPage() {
         <Card className="p-5 space-y-3">
           <div className="flex items-center justify-between pb-1">
             <h3 className="text-xs font-bold uppercase tracking-wider text-surface-700 dark:text-slate-200">
-              Submissions & Pipeline Health
+              Active Member Base
             </h3>
-            <InfoTooltip content="Operational Integrity: Status of unverified member submissions awaiting review by administrative officers before entering ledger balances." />
+            <InfoTooltip content="Total members registered in DE-BLOSSOM Cooperative Society." />
           </div>
           <div className="space-y-2 text-xs">
             <div className="flex justify-between py-1 border-b border-surface-100 dark:border-darkSurface-border">
-              <span className="text-surface-700 dark:text-slate-200">Pending Contributions:</span>
-              <span className="font-bold text-amber-600 dark:text-amber-400">
-                {summary.pendingVerifications} queued
+              <span className="text-surface-700 dark:text-slate-200">Registered Members:</span>
+              <span className="font-bold text-surface-900 dark:text-white">{totalMembers}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-surface-100 dark:border-darkSurface-border">
+              <span className="text-surface-700 dark:text-slate-200">Average Savings / Member:</span>
+              <span className="font-bold text-surface-900 dark:text-white">
+                {formatCurrency(totalMembers > 0 ? totalSavingsPortfolio / totalMembers : 0)}
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-surface-100 dark:border-darkSurface-border">
-              <span className="text-surface-700 dark:text-slate-200">Pending Loan Requests:</span>
-              <span className="font-bold text-sky-500 dark:text-sky-400">
-                {summary.pendingLoanApplications} pending
-              </span>
-            </div>
-            <div className="flex justify-between py-1 border-b border-surface-100 dark:border-darkSurface-border">
-              <span className="text-surface-700 dark:text-slate-200">Active Borrowers:</span>
-              <span className="font-bold text-surface-900 dark:text-white">{summary.activeLoans} members</span>
+              <span className="text-surface-700 dark:text-slate-200">Pending Submissions Queue:</span>
+              <span className="font-bold text-amber-600 dark:text-amber-400">{pendingVerifications}</span>
             </div>
             <div className="flex justify-between pt-1">
-              <span className="font-semibold text-surface-800 dark:text-slate-100">Operational Integrity:</span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">100% Reconciled</span>
+              <span className="font-semibold text-surface-800 dark:text-slate-100">Pending Loan Requests:</span>
+              <span className="font-bold text-amber-600 dark:text-amber-400">{pendingLoanApps}</span>
             </div>
           </div>
         </Card>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   FileText,
@@ -18,13 +18,6 @@ import {
   Calendar,
 } from 'lucide-react';
 import {
-  loanApplications,
-  loans,
-  getMemberSavings,
-  auditLog,
-  currentAdmin,
-} from '@/lib/mock-data';
-import {
   Card,
   StatCard,
   StatusBadge,
@@ -37,32 +30,76 @@ import {
   EmptyState,
   ConfirmDialog,
 } from '@/components/ui/shared';
-import { formatCurrency, formatDate, generateRef } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
-import type { LoanApplication, Loan, LoanApplicationStatus, AuditEntry } from '@/lib/types';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
+import { reviewLoanApplicationAction } from '@/app/actions/loans';
 
 export default function AdminLoanApplicationsPage() {
+  const { user } = useAuth();
   const { addToast } = useToast();
+
+  const [applications, setApplications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
   // Review modal state
-  const [reviewApp, setReviewApp] = useState<LoanApplication | null>(null);
+  const [reviewApp, setReviewApp] = useState<any | null>(null);
   const [approvedAmount, setApprovedAmount] = useState('');
   const [reviewRemarks, setReviewRemarks] = useState('');
-  const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | 'under_review' | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   const pageSize = 8;
 
+  const loadLoanApplications = async () => {
+    if (!user) return;
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('loan_applications')
+        .select('*, profiles:member_id(full_name, member_ref)')
+        .order('application_date', { ascending: false });
+
+      if (!error && data) {
+        setApplications(
+          data.map((a) => ({
+            id: a.id,
+            ref: a.ref,
+            memberId: a.member_id,
+            memberName: a.profiles?.full_name || 'Member',
+            memberRef: a.profiles?.member_ref || 'Pending',
+            requestedAmount: Number(a.requested_amount),
+            approvedAmount: a.approved_amount ? Number(a.approved_amount) : Number(a.requested_amount),
+            repaymentDuration: a.repayment_duration_months,
+            purpose: a.purpose,
+            additionalInfo: a.additional_info,
+            status: a.status,
+            applicationDate: a.application_date,
+            reviewRemarks: a.review_remarks,
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Error fetching loan applications:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLoanApplications();
+  }, [user]);
+
   const filteredApps = useMemo(() => {
-    return loanApplications.filter((app) => {
+    return applications.filter((app) => {
       const matchesSearch =
-        app.ref.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        app.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        app.purpose.toLowerCase().includes(searchTerm.toLowerCase());
+        (app.ref && app.ref.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (app.memberName && app.memberName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (app.purpose && app.purpose.toLowerCase().includes(searchTerm.toLowerCase()));
 
       let matchesTab = true;
       if (activeTab === 'pending') {
@@ -75,96 +112,66 @@ export default function AdminLoanApplicationsPage() {
 
       return matchesSearch && matchesTab;
     });
-  }, [searchTerm, activeTab]);
+  }, [applications, searchTerm, activeTab]);
 
-  const totalPages = Math.ceil(filteredApps.length / pageSize);
+  const totalPages = Math.ceil(filteredApps.length / pageSize) || 1;
   const paginatedData = filteredApps.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
 
-  const pendingCount = loanApplications.filter(
+  const pendingCount = applications.filter(
     (la) => la.status === 'pending' || la.status === 'under_review'
   ).length;
-  const approvedCount = loanApplications.filter((la) => la.status === 'approved').length;
-  const rejectedCount = loanApplications.filter((la) => la.status === 'rejected').length;
+  const approvedCount = applications.filter((la) => la.status === 'approved').length;
+  const rejectedCount = applications.filter((la) => la.status === 'rejected').length;
 
-  const openReviewModal = (app: LoanApplication) => {
+  const openReviewModal = (app: any) => {
     setReviewApp(app);
     setApprovedAmount(app.approvedAmount?.toString() || app.requestedAmount.toString());
-    setReviewRemarks(app.remarks || '');
-    setReviewAction(null);
+    setReviewRemarks(app.reviewRemarks || '');
   };
 
-  const handleDecision = (decision: 'approve' | 'reject' | 'under_review') => {
+  const handleDecision = async (decision: 'approved' | 'rejected') => {
     if (!reviewApp) return;
 
-    if (decision === 'reject' && !reviewRemarks.trim()) {
+    if (decision === 'rejected' && !reviewRemarks.trim()) {
       addToast('error', 'Reason Required', 'Please provide a formal reason for rejection.');
       return;
     }
 
     const appAmt = parseFloat(approvedAmount);
-    if (decision === 'approve' && (isNaN(appAmt) || appAmt <= 0)) {
+    if (decision === 'approved' && (isNaN(appAmt) || appAmt <= 0)) {
       addToast('error', 'Invalid Amount', 'Please set an approved principal amount.');
       return;
     }
 
     setActionLoading(true);
-
-    setTimeout(() => {
-      reviewApp.status = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : decision;
-      reviewApp.reviewedBy = currentAdmin.fullName;
-      reviewApp.reviewedAt = new Date().toISOString();
-      reviewApp.remarks = reviewRemarks.trim();
-
-      if (decision === 'approve') {
-        reviewApp.approvedAmount = appAmt;
-
-        // Create approved loan record (Status: 'approved' - NOT YET DISBURSED!)
-        const newLoan: Loan = {
-          id: `ln_${Date.now()}`,
-          ref: generateRef('LN'),
-          applicationId: reviewApp.id,
-          memberId: reviewApp.memberId,
-          memberName: reviewApp.memberName,
-          principalAmount: appAmt,
-          disbursedAmount: 0,
-          outstandingPrincipal: appAmt,
-          purpose: reviewApp.purpose,
-          status: 'approved',
-          approvalDate: new Date().toISOString(),
-          remarks: reviewRemarks.trim(),
-        };
-        loans.unshift(newLoan);
-      }
-
-      // Log audit
-      const audit: AuditEntry = {
-        id: `aud_${Date.now()}`,
-        performedBy: currentAdmin.id,
-        performedByName: currentAdmin.fullName,
-        action: `loan_application.${decision}`,
-        targetType: 'loan_application',
-        targetId: reviewApp.id,
-        targetRef: reviewApp.ref,
-        details: `${decision.toUpperCase()} loan application for ${reviewApp.memberName} (₦${
-          decision === 'approve' ? appAmt.toLocaleString() : reviewApp.requestedAmount.toLocaleString()
-        })`,
-        timestamp: new Date().toISOString(),
-      };
-      auditLog.unshift(audit);
-
-      setActionLoading(false);
-      setReviewApp(null);
-      addToast(
-        decision === 'approve' ? 'success' : decision === 'reject' ? 'warning' : 'info',
-        `Application ${decision.toUpperCase()}`,
-        decision === 'approve'
-          ? 'Loan approved! Note: Loan disbursement is a separate administrator step.'
-          : 'Decision recorded successfully.'
+    try {
+      const res = await reviewLoanApplicationAction(
+        reviewApp.id,
+        decision,
+        reviewRemarks.trim()
       );
-    }, 1200);
+
+      if (res.success) {
+        addToast(
+          decision === 'approved' ? 'success' : 'info',
+          `Application ${decision.toUpperCase()}`,
+          decision === 'approved'
+            ? 'Loan approved! Note: Loan disbursement is a separate administrator step.'
+            : 'Decision recorded successfully.'
+        );
+        setReviewApp(null);
+        await loadLoanApplications();
+      } else {
+        addToast('error', 'Decision Error', res.error || 'Failed to update application');
+      }
+    } catch (err: any) {
+      addToast('error', 'Action Failed', err?.message || 'Something went wrong');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   return (
@@ -180,20 +187,20 @@ export default function AdminLoanApplicationsPage() {
           title="Pending Committee Review"
           value={pendingCount.toString()}
           subtitle="Awaiting decision"
-          icon={<Clock className="h-5 w-5 text-amber-600" />}
-          className={pendingCount > 0 ? 'border-amber-300 bg-amber-50/20' : ''}
+          icon={<Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
+          className={pendingCount > 0 ? 'border-amber-300 dark:border-amber-800 bg-amber-50/20 dark:bg-amber-950/20' : ''}
         />
         <StatCard
           title="Approved Facilities"
           value={approvedCount.toString()}
           subtitle="Passed committee review"
-          icon={<CheckCircle className="h-5 w-5 text-emerald-600" />}
+          icon={<CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
         />
         <StatCard
           title="Declined Applications"
           value={rejectedCount.toString()}
           subtitle="Did not meet criteria"
-          icon={<XCircle className="h-5 w-5 text-red-600" />}
+          icon={<XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />}
         />
       </div>
 
@@ -218,7 +225,7 @@ export default function AdminLoanApplicationsPage() {
           { label: 'Pending & In Review', value: 'pending', count: pendingCount },
           { label: 'Approved Applications', value: 'approved', count: approvedCount },
           { label: 'Rejected Applications', value: 'rejected', count: rejectedCount },
-          { label: 'All Applications', value: 'all', count: loanApplications.length },
+          { label: 'All Applications', value: 'all', count: applications.length },
         ]}
       />
 
@@ -236,7 +243,12 @@ export default function AdminLoanApplicationsPage() {
 
       {/* Applications Table */}
       <Card padding="none">
-        {paginatedData.length === 0 ? (
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-3 text-surface-400">
+            <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+            <p className="text-xs">Loading loan applications...</p>
+          </div>
+        ) : paginatedData.length === 0 ? (
           <EmptyState
             icon={<FileText className="h-8 w-8" />}
             title="No loan applications found"
@@ -246,7 +258,7 @@ export default function AdminLoanApplicationsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-surface-200 bg-surface-50/50">
+                <tr className="border-b border-surface-200 dark:border-darkSurface-border bg-surface-50/50 dark:bg-darkSurface-bg/50">
                   <th className="table-header">Application Ref</th>
                   <th className="table-header">Applicant Member</th>
                   <th className="table-header">Date</th>
@@ -257,30 +269,30 @@ export default function AdminLoanApplicationsPage() {
                   <th className="table-header text-right">Committee Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-100">
+              <tbody className="divide-y divide-surface-100 dark:divide-darkSurface-border">
                 {paginatedData.map((app) => (
-                  <tr key={app.id} className="hover:bg-surface-50/70 transition-colors">
-                    <td className="table-cell font-mono text-xs font-bold text-surface-900">
+                  <tr key={app.id} className="hover:bg-slate-50 dark:hover:bg-darkSurface-hover transition-colors">
+                    <td className="table-cell font-mono text-xs font-bold text-surface-900 dark:text-white">
                       {app.ref}
                     </td>
                     <td className="table-cell">
-                      <span className="text-xs font-semibold text-surface-900 block">
+                      <span className="text-xs font-semibold text-surface-900 dark:text-white block">
                         {app.memberName}
                       </span>
-                      <span className="text-[10px] text-surface-400 font-mono">
-                        {app.memberId}
+                      <span className="text-[10px] text-surface-400 dark:text-slate-400 font-mono">
+                        Ref: {app.memberRef}
                       </span>
                     </td>
-                    <td className="table-cell text-xs text-surface-600">
+                    <td className="table-cell text-xs text-surface-600 dark:text-slate-300">
                       {formatDate(app.applicationDate)}
                     </td>
-                    <td className="table-cell font-bold text-xs text-surface-900">
+                    <td className="table-cell font-bold text-xs text-surface-900 dark:text-white">
                       {formatCurrency(app.requestedAmount)}
                     </td>
-                    <td className="table-cell text-xs text-surface-600">
+                    <td className="table-cell text-xs text-surface-600 dark:text-slate-300">
                       {app.repaymentDuration} months
                     </td>
-                    <td className="table-cell text-xs text-surface-700 max-w-xs truncate">
+                    <td className="table-cell text-xs text-surface-700 dark:text-slate-300 max-w-xs truncate">
                       {app.purpose}
                     </td>
                     <td className="table-cell">
@@ -307,178 +319,110 @@ export default function AdminLoanApplicationsPage() {
           </div>
         )}
 
-        <Pagination
-          page={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-        />
+        {!loading && filteredApps.length > pageSize && (
+          <Pagination
+            page={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </Card>
 
       {/* DEDICATED LOAN REVIEW MODAL */}
       {reviewApp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => !actionLoading && setReviewApp(null)}
           />
-          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 sm:p-7 shadow-modal border border-surface-200 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-surface-200">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-darkSurface-card p-6 sm:p-7 shadow-modal border border-surface-200 dark:border-darkSurface-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-surface-200 dark:border-darkSurface-border">
               <div>
-                <span className="text-[10px] uppercase font-bold text-surface-400">
+                <span className="text-[10px] uppercase font-bold text-surface-400 dark:text-slate-400">
                   Credit Committee Assessment
                 </span>
-                <h3 className="text-base font-bold text-surface-900 font-mono">
+                <h3 className="text-base font-bold text-surface-900 dark:text-white font-mono">
                   {reviewApp.ref} — {reviewApp.memberName}
                 </h3>
               </div>
               <StatusBadge status={reviewApp.status} />
             </div>
 
-            {/* Applicant Financial Record Snapshot */}
-            {(() => {
-              const memSavings = getMemberSavings(reviewApp.memberId);
-              return (
-                <div className="mt-4 p-4 rounded-xl bg-surface-50 border border-surface-200 space-y-2">
-                  <span className="text-[11px] font-bold text-surface-500 uppercase tracking-wider block">
-                    Applicant Cooperative Savings Health
-                  </span>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <span className="text-surface-400 block text-[10px]">Regular Savings</span>
-                      <span className="font-bold text-brand-900">
-                        {formatCurrency(memSavings.regularSavings)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-surface-400 block text-[10px]">Special Savings</span>
-                      <span className="font-bold text-emerald-700">
-                        {formatCurrency(memSavings.specialSavings)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-surface-400 block text-[10px]">Total Savings</span>
-                      <span className="font-bold text-surface-900">
-                        {formatCurrency(memSavings.totalSavings)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Application Details */}
-            <div className="mt-4 space-y-3 text-xs">
+            <div className="mt-4 p-4 rounded-xl bg-surface-50 dark:bg-darkSurface-bg border border-surface-200 dark:border-darkSurface-border space-y-2 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <span className="text-surface-400 block text-[11px]">Requested Principal</span>
-                  <span className="font-bold text-sm text-surface-900">
-                    {formatCurrency(reviewApp.requestedAmount)}
-                  </span>
+                  <span className="text-surface-400 dark:text-slate-400 block text-[10px]">Requested Amount</span>
+                  <span className="font-bold text-base text-brand-900 dark:text-emerald-400">{formatCurrency(reviewApp.requestedAmount)}</span>
                 </div>
                 <div>
-                  <span className="text-surface-400 block text-[11px]">Tenure</span>
-                  <span className="font-medium text-surface-800">
-                    {reviewApp.repaymentDuration} months
-                  </span>
+                  <span className="text-surface-400 dark:text-slate-400 block text-[10px]">Tenure</span>
+                  <span className="font-semibold text-surface-900 dark:text-white">{reviewApp.repaymentDuration} Months</span>
                 </div>
               </div>
-
-              <div>
-                <span className="text-surface-400 block text-[11px]">Purpose</span>
-                <p className="p-2.5 rounded-lg bg-surface-50 border border-surface-200 text-surface-700">
-                  {reviewApp.purpose}
-                </p>
+              <div className="pt-2 border-t border-surface-200 dark:border-darkSurface-border">
+                <span className="text-surface-400 dark:text-slate-400 block text-[10px]">Purpose</span>
+                <p className="text-surface-800 dark:text-slate-200">{reviewApp.purpose}</p>
               </div>
-
               {reviewApp.additionalInfo && (
-                <div>
-                  <span className="text-surface-400 block text-[11px]">Additional Information</span>
-                  <p className="p-2.5 rounded-lg bg-surface-50 border border-surface-200 text-surface-700">
-                    {reviewApp.additionalInfo}
-                  </p>
+                <div className="pt-2 border-t border-surface-200 dark:border-darkSurface-border">
+                  <span className="text-surface-400 dark:text-slate-400 block text-[10px]">Additional Notes / Guarantor Details</span>
+                  <p className="text-surface-700 dark:text-slate-300">{reviewApp.additionalInfo}</p>
                 </div>
               )}
             </div>
 
-            {/* Decision Controls (if pending or under_review) */}
-            {(reviewApp.status === 'pending' || reviewApp.status === 'under_review') && (
-              <div className="mt-5 pt-4 border-t border-surface-200 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="approvedAmt" className="label text-xs">
-                      Approved Principal Amount (₦)
-                    </label>
-                    <input
-                      id="approvedAmt"
-                      type="number"
-                      step="5000"
-                      value={approvedAmount}
-                      onChange={(e) => setApprovedAmount(e.target.value)}
-                      className="input-field text-xs font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="commRemarks" className="label text-xs">
-                      Committee Remarks / Conditions
-                    </label>
-                    <input
-                      id="commRemarks"
-                      type="text"
-                      value={reviewRemarks}
-                      onChange={(e) => setReviewRemarks(e.target.value)}
-                      placeholder="e.g. Approved based on consistent 6-month equity."
-                      className="input-field text-xs"
-                    />
-                  </div>
+            {/* Assessment Input */}
+            {reviewApp.status === 'pending' || reviewApp.status === 'under_review' ? (
+              <div className="mt-5 space-y-4">
+                <div>
+                  <label className="label">Approved Amount (₦)</label>
+                  <input
+                    type="number"
+                    value={approvedAmount}
+                    onChange={(e) => setApprovedAmount(e.target.value)}
+                    className="input-field font-semibold text-sm"
+                  />
                 </div>
 
-                <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+                <div>
+                  <label className="label">Committee Remarks / Decision Notes</label>
+                  <textarea
+                    rows={3}
+                    value={reviewRemarks}
+                    onChange={(e) => setReviewRemarks(e.target.value)}
+                    placeholder="Enter approval conditions or rejection grounds..."
+                    className="input-field text-xs"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-surface-200 dark:border-darkSurface-border">
                   <button
-                    type="button"
                     disabled={actionLoading}
-                    onClick={() => handleDecision('under_review')}
+                    onClick={() => setReviewApp(null)}
                     className="btn-secondary text-xs"
                   >
-                    Mark Under Review
+                    Cancel
                   </button>
                   <button
-                    type="button"
                     disabled={actionLoading}
-                    onClick={() => handleDecision('reject')}
+                    onClick={() => handleDecision('rejected')}
                     className="btn-danger text-xs"
                   >
-                    Reject Application
+                    Decline Request
                   </button>
                   <button
-                    type="button"
                     disabled={actionLoading}
-                    onClick={() => handleDecision('approve')}
+                    onClick={() => handleDecision('approved')}
                     className="btn-accent text-xs font-bold inline-flex items-center gap-1.5"
                   >
-                    {actionLoading ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Recording...
-                      </>
-                    ) : (
-                      'Approve Loan Facility'
-                    )}
+                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                    Approve Facility
                   </button>
                 </div>
               </div>
-            )}
-
-            {/* Close button if already finalized */}
-            {reviewApp.status !== 'pending' && reviewApp.status !== 'under_review' && (
-              <div className="mt-6 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setReviewApp(null)}
-                  className="btn-secondary text-xs"
-                >
-                  Close
-                </button>
+            ) : (
+              <div className="mt-4 flex justify-end">
+                <button onClick={() => setReviewApp(null)} className="btn-secondary text-xs">Close</button>
               </div>
             )}
           </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   RefreshCw,
@@ -15,13 +15,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import {
-  repayments,
-  loans,
-  transactions,
-  auditLog,
-  currentAdmin,
-} from '@/lib/mock-data';
-import {
   Card,
   StatCard,
   StatusBadge,
@@ -34,19 +27,25 @@ import {
   EmptyState,
   ConfirmDialog,
 } from '@/components/ui/shared';
-import { formatCurrency, formatDate, formatDateTime, generateRef } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
-import type { Repayment, RepaymentStatus, Transaction, AuditEntry } from '@/lib/types';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
+import { approveRepaymentAction, rejectRepaymentAction } from '@/app/actions/repayments';
 
 export default function AdminRepaymentsPage() {
+  const { user } = useAuth();
   const { addToast } = useToast();
+
+  const [repaymentsList, setRepaymentsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
   // Review modal state
-  const [reviewRepayment, setReviewRepayment] = useState<Repayment | null>(null);
+  const [reviewRepayment, setReviewRepayment] = useState<any | null>(null);
   const [reviewRemarks, setReviewRemarks] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -55,178 +54,150 @@ export default function AdminRepaymentsPage() {
 
   const pageSize = 8;
 
+  const loadRepayments = async () => {
+    if (!user) return;
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('repayments')
+        .select('*, profiles:member_id(full_name, member_ref), loans:loan_id(ref)')
+        .order('submission_date', { ascending: false });
+
+      if (!error && data) {
+        setRepaymentsList(
+          data.map((r) => ({
+            id: r.id,
+            ref: r.ref,
+            loanId: r.loan_id,
+            loanRef: r.loans?.ref || 'Loan',
+            memberId: r.member_id,
+            memberName: r.profiles?.full_name || 'Member',
+            memberRef: r.profiles?.member_ref || 'Pending',
+            amount: Number(r.amount),
+            principalComponent: Number(r.principal_component || r.amount),
+            paymentDate: r.payment_date,
+            submissionDate: r.submission_date,
+            transferReference: r.transfer_reference || r.ref,
+            status: r.status,
+            receiptUrl: r.receipt_url,
+            remarks: r.remarks,
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Error fetching admin repayments:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRepayments();
+  }, [user]);
+
   const filteredRepayments = useMemo(() => {
-    return repayments.filter((r) => {
+    return repaymentsList.filter((r) => {
       const matchesSearch =
-        r.ref.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.loanRef.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.transferReference.toLowerCase().includes(searchTerm.toLowerCase());
+        (r.ref && r.ref.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (r.memberName && r.memberName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (r.loanRef && r.loanRef.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (r.transferReference && r.transferReference.toLowerCase().includes(searchTerm.toLowerCase()));
 
       const matchesTab = activeTab === 'all' || r.status === activeTab;
 
       return matchesSearch && matchesTab;
     });
-  }, [searchTerm, activeTab]);
+  }, [repaymentsList, searchTerm, activeTab]);
 
-  const totalPages = Math.ceil(filteredRepayments.length / pageSize);
+  const totalPages = Math.ceil(filteredRepayments.length / pageSize) || 1;
   const paginatedData = filteredRepayments.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
 
-  const pendingCount = repayments.filter((r) => r.status === 'pending').length;
-  const approvedCount = repayments.filter((r) => r.status === 'approved').length;
-  const rejectedCount = repayments.filter((r) => r.status === 'rejected').length;
+  const pendingCount = repaymentsList.filter((r) => r.status === 'pending').length;
+  const approvedCount = repaymentsList.filter((r) => r.status === 'approved').length;
+  const rejectedCount = repaymentsList.filter((r) => r.status === 'rejected').length;
 
-  const totalApprovedRepaid = repayments
+  const totalApprovedRepaid = repaymentsList
     .filter((r) => r.status === 'approved')
     .reduce((sum, r) => sum + r.amount, 0);
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!reviewRepayment) return;
     setActionLoading(true);
-
-    setTimeout(() => {
-      // 1. Update repayment status
-      reviewRepayment.status = 'approved';
-      reviewRepayment.verifiedBy = currentAdmin.fullName;
-      reviewRepayment.verifiedAt = new Date().toISOString();
-      reviewRepayment.remarks = reviewRemarks || 'Bank transfer verified against loan account.';
-
-      // 2. Reduce outstanding principal on related loan
-      const targetLoan = loans.find((l) => l.id === reviewRepayment.loanId);
-      if (targetLoan) {
-        targetLoan.outstandingPrincipal = Math.max(
-          0,
-          targetLoan.outstandingPrincipal - reviewRepayment.principalComponent
+    try {
+      const res = await approveRepaymentAction(reviewRepayment.id, reviewRemarks);
+      if (res.success) {
+        setApproveModalOpen(false);
+        setReviewRepayment(null);
+        addToast(
+          'success',
+          'Repayment Approved & Posted',
+          `Payment ${reviewRepayment.ref} has been approved and loan balance amortized.`
         );
-        if (targetLoan.outstandingPrincipal === 0) {
-          targetLoan.status = 'repaid';
-          targetLoan.completionDate = new Date().toISOString();
-        }
+        await loadRepayments();
+      } else {
+        addToast('error', 'Approval Error', res.error || 'Failed to approve repayment');
       }
-
-      // 3. Post to financial ledger
-      const newTxn: Transaction = {
-        id: `txn_${Date.now()}`,
-        ref: generateRef('TXN'),
-        memberId: reviewRepayment.memberId,
-        memberName: reviewRepayment.memberName,
-        type: 'loan_repayment',
-        category: 'loan',
-        description: `Loan repayment installment for ${reviewRepayment.loanRef}`,
-        credit: 0,
-        debit: reviewRepayment.principalComponent,
-        currency: 'NGN',
-        relatedRef: reviewRepayment.ref,
-        sourceRef: reviewRepayment.transferReference,
-        date: new Date().toISOString(),
-        status: 'posted',
-      };
-      transactions.unshift(newTxn);
-
-      // 4. Log in audit trail
-      const audit: AuditEntry = {
-        id: `aud_${Date.now()}`,
-        performedBy: currentAdmin.id,
-        performedByName: currentAdmin.fullName,
-        action: 'repayment.approved',
-        targetType: 'repayment',
-        targetId: reviewRepayment.id,
-        targetRef: reviewRepayment.ref,
-        details: `Approved loan repayment of ₦${reviewRepayment.amount.toLocaleString()} from ${
-          reviewRepayment.memberName
-        }`,
-        timestamp: new Date().toISOString(),
-      };
-      auditLog.unshift(audit);
-
+    } catch (err: any) {
+      addToast('error', 'Action Error', err?.message || 'Something went wrong');
+    } finally {
       setActionLoading(false);
-      setApproveModalOpen(false);
-      setReviewRepayment(null);
-      addToast(
-        'success',
-        'Repayment Verified',
-        `Installment of ${formatCurrency(reviewRepayment.amount)} verified and deducted from loan balance.`
-      );
-    }, 1200);
+    }
   };
 
-  const handleReject = () => {
-    if (!reviewRepayment) return;
-    if (!rejectReason.trim()) {
-      addToast('error', 'Reason Required', 'Please specify why this repayment is rejected.');
+  const handleReject = async () => {
+    if (!reviewRepayment || !rejectReason.trim()) {
+      addToast('error', 'Reason Required', 'Please provide a reason for rejecting this repayment proof.');
       return;
     }
-
     setActionLoading(true);
-
-    setTimeout(() => {
-      reviewRepayment.status = 'rejected';
-      reviewRepayment.verifiedBy = currentAdmin.fullName;
-      reviewRepayment.verifiedAt = new Date().toISOString();
-      reviewRepayment.remarks = rejectReason.trim();
-
-      const audit: AuditEntry = {
-        id: `aud_${Date.now()}`,
-        performedBy: currentAdmin.id,
-        performedByName: currentAdmin.fullName,
-        action: 'repayment.rejected',
-        targetType: 'repayment',
-        targetId: reviewRepayment.id,
-        targetRef: reviewRepayment.ref,
-        details: `Rejected loan repayment ${reviewRepayment.ref} from ${reviewRepayment.memberName}: ${rejectReason.trim()}`,
-        timestamp: new Date().toISOString(),
-      };
-      auditLog.unshift(audit);
-
+    try {
+      const res = await rejectRepaymentAction(reviewRepayment.id, rejectReason.trim());
+      if (res.success) {
+        setRejectModalOpen(false);
+        setReviewRepayment(null);
+        addToast('info', 'Repayment Rejected', `Installment ${reviewRepayment.ref} was marked as rejected.`);
+        await loadRepayments();
+      } else {
+        addToast('error', 'Rejection Error', res.error || 'Failed to reject repayment');
+      }
+    } catch (err: any) {
+      addToast('error', 'Action Error', err?.message || 'Something went wrong');
+    } finally {
       setActionLoading(false);
-      setRejectModalOpen(false);
-      setReviewRepayment(null);
-      addToast('warning', 'Repayment Rejected', 'Repayment submission rejected. No ledger impact.');
-    }, 1200);
+    }
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Repayment Verification Queue"
-        description="Verify member installment transfers against bank records. Verified repayments reduce outstanding loan principal directly."
+        title="Loan Repayment Management"
+        description="Verify member repayment installments and amortize active loan principal balances."
       />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
-          title="Pending Verification"
+          title="Pending Bank Reconciliation"
           value={pendingCount.toString()}
-          subtitle="Unverified installment receipts"
-          icon={<Clock className="h-5 w-5 text-amber-600" />}
-          className={pendingCount > 0 ? 'border-amber-300 bg-amber-50/20' : ''}
+          subtitle="Installments awaiting verification"
+          icon={<Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
+          className={pendingCount > 0 ? 'border-amber-300 dark:border-amber-800 bg-amber-50/20 dark:bg-amber-950/20' : ''}
         />
         <StatCard
-          title="Total Approved Repayments"
+          title="Verified Settlements"
+          value={approvedCount.toString()}
+          subtitle="Credited to loan accounts"
+          icon={<CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
+        />
+        <StatCard
+          title="Total Principal Recovered"
           value={formatCurrency(totalApprovedRepaid)}
-          subtitle="Directly amortized from debt"
-          icon={<CheckCircle className="h-5 w-5 text-emerald-600" />}
+          subtitle="Lifetime amortization total"
+          icon={<Landmark className="h-5 w-5 text-brand-900 dark:text-sky-400" />}
         />
-        <StatCard
-          title="Rejected Submissions"
-          value={rejectedCount.toString()}
-          subtitle="Invalid transfer slips"
-          icon={<XCircle className="h-5 w-5 text-red-600" />}
-        />
-      </div>
-
-      {/* Principal-Only Policy Alert */}
-      <div className="p-4 rounded-xl bg-surface-100 border border-surface-200 flex items-start gap-3">
-        <AlertCircle className="h-5 w-5 text-brand-800 shrink-0 mt-0.5" />
-        <div className="text-xs text-surface-700 leading-relaxed">
-          <strong className="text-surface-900">Principal-Only Amortization:</strong> Interest and fee
-          components are currently inactive. All approved repayments reduce outstanding loan principal
-          by 100% of the verified amount. Overpayments beyond the facility&apos;s outstanding balance
-          are strictly disallowed.
-        </div>
       </div>
 
       {/* Tabs */}
@@ -238,9 +209,9 @@ export default function AdminRepaymentsPage() {
         }}
         tabs={[
           { label: 'Pending Verification', value: 'pending', count: pendingCount },
-          { label: 'Approved Repayments', value: 'approved', count: approvedCount },
-          { label: 'Rejected Repayments', value: 'rejected', count: rejectedCount },
-          { label: 'All Records', value: 'all', count: repayments.length },
+          { label: 'Approved Entries', value: 'approved', count: approvedCount },
+          { label: 'Rejected Proofs', value: 'rejected', count: rejectedCount },
+          { label: 'All Submissions', value: 'all', count: repaymentsList.length },
         ]}
       />
 
@@ -252,62 +223,63 @@ export default function AdminRepaymentsPage() {
             setSearchTerm(v);
             setCurrentPage(1);
           }}
-          placeholder="Search by member name, repayment ref, or loan ID..."
+          placeholder="Search by repayment ref, member name, loan code, or bank session ID..."
         />
       </Card>
 
       {/* Repayments Table */}
       <Card padding="none">
-        {paginatedData.length === 0 ? (
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-3 text-surface-400">
+            <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+            <p className="text-xs">Loading loan repayment entries...</p>
+          </div>
+        ) : paginatedData.length === 0 ? (
           <EmptyState
             icon={<RefreshCw className="h-8 w-8" />}
-            title="No repayment submissions found"
-            description="No records match your selected filter."
+            title="No repayment entries found"
+            description="No records match your selected filter or search query."
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-surface-200 bg-surface-50/50">
+                <tr className="border-b border-surface-200 dark:border-darkSurface-border bg-surface-50/50 dark:bg-darkSurface-bg/50">
                   <th className="table-header">Repayment Ref</th>
                   <th className="table-header">Member</th>
-                  <th className="table-header">Facility Link</th>
-                  <th className="table-header">Total Amount</th>
-                  <th className="table-header">Principal Component</th>
-                  <th className="table-header">Interest / Fees</th>
-                  <th className="table-header">Payment Date</th>
+                  <th className="table-header">Target Facility</th>
+                  <th className="table-header">Amount Paid</th>
+                  <th className="table-header">Transfer Date</th>
+                  <th className="table-header">Bank Reference</th>
                   <th className="table-header">Status</th>
-                  <th className="table-header text-right">Action</th>
+                  <th className="table-header text-right">Verification Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-100">
+              <tbody className="divide-y divide-surface-100 dark:divide-darkSurface-border">
                 {paginatedData.map((r) => (
-                  <tr key={r.id} className="hover:bg-surface-50/70 transition-colors">
-                    <td className="table-cell font-mono text-xs font-bold text-surface-900">
+                  <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-darkSurface-hover transition-colors">
+                    <td className="table-cell font-mono text-xs font-bold text-surface-900 dark:text-white">
                       {r.ref}
                     </td>
                     <td className="table-cell">
-                      <span className="text-xs font-semibold text-surface-900 block">
+                      <span className="text-xs font-semibold text-surface-900 dark:text-white block">
                         {r.memberName}
                       </span>
-                      <span className="text-[10px] text-surface-400 font-mono">
-                        {r.transferReference}
+                      <span className="text-[10px] text-surface-400 dark:text-slate-400 font-mono">
+                        Ref: {r.memberRef}
                       </span>
                     </td>
-                    <td className="table-cell font-mono text-xs text-brand-800">
-                      <Link href={`/admin/loans/${r.loanId}`} className="hover:underline">
-                        {r.loanRef}
-                      </Link>
+                    <td className="table-cell font-mono text-xs text-brand-900 dark:text-sky-400 font-semibold">
+                      {r.loanRef}
                     </td>
-                    <td className="table-cell font-bold text-xs text-surface-900">
+                    <td className="table-cell font-bold text-xs text-surface-900 dark:text-white">
                       {formatCurrency(r.amount)}
                     </td>
-                    <td className="table-cell font-bold text-xs text-emerald-700">
-                      {formatCurrency(r.principalComponent)}
-                    </td>
-                    <td className="table-cell text-xs text-surface-400">₦0.00 / ₦0.00</td>
-                    <td className="table-cell text-xs text-surface-600">
+                    <td className="table-cell text-xs text-surface-600 dark:text-slate-300">
                       {formatDate(r.paymentDate)}
+                    </td>
+                    <td className="table-cell font-mono text-xs text-surface-600 dark:text-slate-400">
+                      {r.transferReference}
                     </td>
                     <td className="table-cell">
                       <StatusBadge status={r.status} />
@@ -318,26 +290,27 @@ export default function AdminRepaymentsPage() {
                           <button
                             onClick={() => {
                               setReviewRepayment(r);
+                              setRejectReason('');
                               setRejectModalOpen(true);
                             }}
-                            className="btn-danger text-[11px] px-2 py-1"
+                            className="btn-danger text-xs px-2.5 py-1"
                           >
                             Reject
                           </button>
                           <button
                             onClick={() => {
                               setReviewRepayment(r);
+                              setReviewRemarks('');
                               setApproveModalOpen(true);
                             }}
-                            className="btn-accent text-[11px] px-2.5 py-1 font-bold"
+                            className="btn-accent text-xs px-3 py-1 font-bold inline-flex items-center gap-1"
                           >
-                            Approve
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            Verify & Post
                           </button>
                         </div>
                       ) : (
-                        <span className="text-xs text-surface-400">
-                          {r.verifiedBy ? `By ${r.verifiedBy}` : 'Processed'}
-                        </span>
+                        <span className="text-xs text-surface-400 dark:text-slate-500 font-medium">Reconciled</span>
                       )}
                     </td>
                   </tr>
@@ -347,85 +320,54 @@ export default function AdminRepaymentsPage() {
           </div>
         )}
 
-        <Pagination
-          page={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-        />
+        {!loading && filteredRepayments.length > pageSize && (
+          <Pagination
+            page={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </Card>
 
-      {/* APPROVE REPAYMENT DIALOG */}
-      {approveModalOpen && reviewRepayment && (
+      {/* Approve Dialog */}
+      {reviewRepayment && (
         <ConfirmDialog
           open={approveModalOpen}
-          title="Verify & Post Loan Repayment?"
-          message={`Confirm receipt of ${formatCurrency(
-            reviewRepayment.amount
-          )} from ${reviewRepayment.memberName} for loan ${reviewRepayment.loanRef}. This will reduce outstanding loan principal and post a debit entry to the ledger.`}
-          confirmLabel={actionLoading ? 'Posting...' : 'Confirm Repayment'}
+          title="Approve Loan Repayment"
+          message={`Confirm verification of ₦${reviewRepayment.amount.toLocaleString()} for loan ${reviewRepayment.loanRef}? This will permanently credit the society ledger and reduce the member's outstanding loan principal.`}
+          confirmLabel={actionLoading ? 'Posting...' : 'Approve & Amortize'}
           variant="accent"
           onConfirm={handleApprove}
-          onCancel={() => setApproveModalOpen(false)}
+          onCancel={() => {
+            setApproveModalOpen(false);
+            setReviewRepayment(null);
+          }}
         />
       )}
 
-      {/* REJECT REPAYMENT MODAL */}
-      {rejectModalOpen && reviewRepayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => !actionLoading && setRejectModalOpen(false)}
+      {/* Reject Dialog */}
+      {reviewRepayment && (
+        <ConfirmDialog
+          open={rejectModalOpen}
+          title="Reject Repayment Proof"
+          message="Please state why this repayment is rejected (e.g. transfer not received on bank statement)."
+          confirmLabel={actionLoading ? 'Rejecting...' : 'Reject Proof'}
+          variant="danger"
+          onConfirm={handleReject}
+          onCancel={() => {
+            setRejectModalOpen(false);
+            setReviewRepayment(null);
+          }}
+        >
+          <textarea
+            rows={3}
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="Document rejection reason for audit log..."
+            className="input-field text-xs mt-2"
+            required
           />
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-modal border border-surface-200">
-            <h3 className="text-lg font-bold text-surface-900">Reject Repayment Submission</h3>
-            <p className="text-xs text-surface-500 mt-1">
-              Provide an administrative reason for declining this repayment proof.
-            </p>
-
-            <div className="mt-4 space-y-3">
-              <div>
-                <label htmlFor="rejectReason" className="label text-xs">
-                  Rejection Reason (Required)
-                </label>
-                <textarea
-                  id="rejectReason"
-                  rows={3}
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="e.g. Bank statement does not reflect transfer session ID."
-                  className="input-field text-xs"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-surface-200 mt-4">
-              <button
-                type="button"
-                disabled={actionLoading}
-                onClick={() => setRejectModalOpen(false)}
-                className="btn-secondary text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={actionLoading || !rejectReason.trim()}
-                onClick={handleReject}
-                className="btn-danger text-xs inline-flex items-center gap-1.5"
-              >
-                {actionLoading ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Rejecting...
-                  </>
-                ) : (
-                  'Confirm Rejection'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        </ConfirmDialog>
       )}
     </div>
   );

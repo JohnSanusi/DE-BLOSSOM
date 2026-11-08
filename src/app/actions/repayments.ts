@@ -97,8 +97,7 @@ export async function approveRepaymentAction(
 
     const { data, error } = await supabase.rpc('approve_repayment', {
       p_repayment_id: repaymentId,
-      p_admin_id: user.id,
-      p_notes: adminNotes || 'Repayment verified by admin',
+      p_remarks: adminNotes || 'Repayment verified by admin',
     });
 
     if (error) {
@@ -150,7 +149,7 @@ export async function rejectRepaymentAction(
       .from('repayments')
       .update({
         status: 'rejected',
-        rejection_reason: reason.trim(),
+        remarks: reason.trim(),
         verified_by: user.id,
         verified_at: new Date().toISOString(),
       })

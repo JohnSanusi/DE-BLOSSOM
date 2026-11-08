@@ -110,21 +110,35 @@ export async function reviewLoanApplicationAction(
       return { success: false, error: 'Unauthorized.' };
     }
 
-    const { data, error } = await supabase
+    const { data: app, error: appError } = await supabase
       .from('loan_applications')
       .update({
         status: decision,
-        admin_notes: notes || null,
-        rejection_reason: decision === 'rejected' ? (notes || 'Application declined') : null,
-        approved_by: decision === 'approved' ? user.id : null,
-        approved_at: decision === 'approved' ? new Date().toISOString() : null,
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+        review_remarks: notes || (decision === 'approved' ? 'Approved by Credit Committee' : 'Application declined'),
       })
       .eq('id', applicationId)
       .select()
       .single();
 
-    if (error) {
-      return { success: false, error: error.message };
+    if (appError) {
+      return { success: false, error: appError.message };
+    }
+
+    // If approved, create loan facility record awaiting disbursement
+    if (decision === 'approved' && app) {
+      const approvedAmt = Number(app.approved_amount || app.requested_amount);
+      await supabase.from('loans').insert({
+        application_id: app.id,
+        member_id: app.member_id,
+        principal_amount: approvedAmt,
+        disbursed_amount: 0.00,
+        outstanding_principal: approvedAmt,
+        repayment_duration_months: app.repayment_duration_months,
+        purpose: app.purpose,
+        status: 'approved',
+      });
     }
 
     revalidatePath('/admin/loans');
