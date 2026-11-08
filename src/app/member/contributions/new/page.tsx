@@ -19,7 +19,7 @@ import {
   Info,
   HelpCircle,
 } from 'lucide-react';
-import { currentMember, cooperativeSettings, contributions } from '@/lib/mock-data';
+import { cooperativeSettings } from '@/lib/mock-data';
 import { Card, PageHeader } from '@/components/ui/shared';
 import { formatCurrency, generateRef } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
@@ -28,14 +28,24 @@ import type { Contribution, SavingsType } from '@/lib/types';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { submitContributionAction } from '@/app/actions/contributions';
 import { uploadReceiptAction } from '@/app/actions/storage';
+import { useAuth } from '@/lib/supabase/auth-context';
 
 export default function NewContributionPage() {
   const router = useRouter();
   const { addToast } = useToast();
+  const { user, profile } = useAuth();
 
   const [type, setType] = useState<SavingsType>('regular');
   const [amount, setAmount] = useState('');
-  const [senderName, setSenderName] = useState(currentMember.fullName);
+  const [senderName, setSenderName] = useState('');
+
+  React.useEffect(() => {
+    if (profile?.full_name) {
+      setSenderName(profile.full_name);
+    } else if (user?.user_metadata?.full_name) {
+      setSenderName(user.user_metadata.full_name);
+    }
+  }, [profile, user]);
   const [paymentDate, setPaymentDate] = useState(
     new Date().toISOString().split('T')[0]
   );

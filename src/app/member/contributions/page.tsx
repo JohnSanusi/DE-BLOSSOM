@@ -148,7 +148,7 @@ export default function MemberContributionsPage() {
         />
         <StatCard
           title="Total Submissions"
-          value={`${contributions.filter((c) => c.memberId === currentMember.id).length} records`}
+          value={`${contributionsList.length} record${contributionsList.length === 1 ? '' : 's'}`}
           subtitle="Lifetime payment submissions"
           icon={<HandCoins className="h-5 w-5 text-brand-800" />}
         />
