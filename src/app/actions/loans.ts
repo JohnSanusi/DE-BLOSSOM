@@ -147,7 +147,7 @@ export async function reviewLoanApplicationAction(
     return {
       success: true,
       message: `Loan application has been ${decision}.`,
-      data,
+      data: app,
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Action failed' };
