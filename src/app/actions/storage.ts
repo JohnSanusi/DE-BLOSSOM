@@ -67,15 +67,12 @@ export async function uploadReceiptAction(formData: FormData): Promise<StorageRe
       return { success: false, error: error.message };
     }
 
-    // Generate a signed URL valid for 1 hour for secure viewing
-    const { data: signedData } = await supabase.storage
-      .from('receipts')
-      .createSignedUrl(data.path, 3600);
-
+    // Store the file PATH only (not signed URL) — signed URLs expire.
+    // The admin review page generates a fresh signed URL on demand.
     return {
       success: true,
       filePath: data.path,
-      url: signedData?.signedUrl || data.path,
+      url: data.path,
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Upload failed' };

@@ -68,6 +68,15 @@ export default function AdminContributionReviewPage({ params }: PageProps) {
           .maybeSingle();
 
         if (data) {
+          // Generate a fresh signed URL for the receipt (storage paths expire)
+          let receiptUrl: string | null = data.receipt_url || null;
+          if (receiptUrl && !receiptUrl.startsWith('http')) {
+            const { data: signedData } = await supabase.storage
+              .from('receipts')
+              .createSignedUrl(receiptUrl, 3600);
+            receiptUrl = signedData?.signedUrl || null;
+          }
+
           setContribution({
             id: data.id,
             ref: data.ref,
@@ -80,7 +89,7 @@ export default function AdminContributionReviewPage({ params }: PageProps) {
             paymentDate: data.payment_date,
             submissionDate: data.submission_date,
             transferReference: data.transfer_reference || data.ref,
-            receiptUrl: data.receipt_url,
+            receiptUrl,
             remarks: data.remarks || '',
             verifiedAt: data.verified_at,
           });
