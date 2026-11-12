@@ -82,18 +82,18 @@ interface StatCardProps {
 
 export function StatCard({ title, value, subtitle, icon, trend, tooltip, className }: StatCardProps) {
   return (
-    <Card className={cn('flex items-start gap-4 hover:-translate-y-0.5 transition-transform duration-200', className)}>
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-emerald-700 dark:bg-slate-800 dark:text-emerald-400">
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <p className="text-xs font-semibold text-surface-600 dark:text-slate-300 truncate">{title}</p>
-          {tooltip && <InfoTooltip content={tooltip} />}
+    <Card className={cn('flex flex-col gap-3 hover:-translate-y-0.5 transition-transform duration-200', className)}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-emerald-700 dark:bg-slate-800 dark:text-emerald-400">
+          {icon}
         </div>
-        <p className="text-xl font-bold text-surface-900 dark:text-white mt-0.5 tracking-tight">{value}</p>
+        {tooltip && <InfoTooltip content={tooltip} />}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-surface-600 dark:text-slate-300 leading-tight">{title}</p>
+        <p className="text-lg font-bold text-surface-900 dark:text-white mt-1 tracking-tight leading-tight break-all">{value}</p>
         {subtitle && (
-          <p className="text-xs text-surface-500 dark:text-slate-300 mt-0.5 truncate">{subtitle}</p>
+          <p className="text-[11px] text-surface-500 dark:text-slate-400 mt-0.5 leading-tight">{subtitle}</p>
         )}
         {trend && (
           <p

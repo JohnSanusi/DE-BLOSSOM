@@ -260,46 +260,46 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* 6 Key Executive StatCards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard
-          title="Total Registered Members"
+          title="Total Members"
           value={summary.totalMembers.toString()}
-          subtitle="Registered participants"
+          subtitle="Registered"
           icon={<Users className="h-4 w-4 text-brand-900 dark:text-sky-400" />}
         />
         <StatCard
-          title="Approved Contributions"
+          title="Contributions"
           value={formatCurrency(summary.totalApprovedContributions)}
-          subtitle="Verified ledger equity"
+          subtitle="Verified equity"
           tooltip="Verified Ledger Postings: Cumulative sum of all member contributions that have been reconciled and permanently posted into member accounts."
           icon={<CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
         />
         <StatCard
-          title="Pending Verifications"
+          title="Pending Verif."
           value={summary.pendingVerifications.toString()}
-          subtitle="Requires receipt review"
+          subtitle="Receipt review"
           tooltip="Action Required: Bank payment slips uploaded by members awaiting verification against official cooperative bank statements."
           icon={<Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
           className={summary.pendingVerifications > 0 ? 'border-amber-300 dark:border-amber-800 bg-amber-50/20 dark:bg-amber-950/20' : ''}
         />
         <StatCard
-          title="Active Loan Facilities"
+          title="Active Loans"
           value={summary.activeLoans.toString()}
-          subtitle="Disbursed & amortizing"
+          subtitle="Disbursed"
           tooltip="Active Credit Facilities: Loans that have been approved and formally disbursed by the treasurer to member bank accounts."
           icon={<Landmark className="h-4 w-4 text-emerald-600 dark:text-sky-400" />}
         />
         <StatCard
-          title="Outstanding Principal"
+          title="Outstanding"
           value={formatCurrency(summary.outstandingLoanPrincipal)}
-          subtitle="Principal to recover"
+          subtitle="Principal"
           tooltip="Cooperative Credit Exposure: Total disbursed loan capital currently held by members awaiting recovery via verified repayments."
           icon={<DollarSign className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
         />
         <StatCard
-          title="Pending Applications"
+          title="Loan Apps"
           value={summary.pendingLoanApplications.toString()}
-          subtitle="Awaiting committee vote"
+          subtitle="Awaiting vote"
           tooltip="Committee Queue: Loan applications awaiting committee credit evaluation against regular savings equity."
           icon={<FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
           className={summary.pendingLoanApplications > 0 ? 'border-blue-300 dark:border-blue-800 bg-blue-50/20 dark:bg-blue-950/20' : ''}
