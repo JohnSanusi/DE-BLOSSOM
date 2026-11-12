@@ -272,10 +272,10 @@ export default function AdminMemberDetailPage({ params }: PageProps) {
       {/* Tabs */}
       <Tabs
         tabs={[
-          { id: 'overview', label: 'Member Overview' },
-          { id: 'contributions', label: `Contributions (${memberContribs.length})` },
-          { id: 'loans', label: `Loans (${memberLoans.length})` },
-          { id: 'transactions', label: `Transactions (${memberTxns.length})` },
+          { value: 'overview', label: 'Member Overview' },
+          { value: 'contributions', label: `Contributions (${memberContribs.length})` },
+          { value: 'loans', label: `Loans (${memberLoans.length})` },
+          { value: 'transactions', label: `Transactions (${memberTxns.length})` },
         ]}
         activeTab={activeTab}
         onChange={(t) => setActiveTab(t as any)}

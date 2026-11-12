@@ -348,11 +348,11 @@ export default function AdminContributionReviewPage({ params }: PageProps) {
         <ReceiptPreviewModal
           isOpen={receiptModalOpen}
           onClose={() => setReceiptModalOpen(false)}
-          receiptUrl={contribution.receiptUrl}
-          transferReference={contribution.transferReference}
+          imageUrl={contribution.receiptUrl}
+          reference={contribution.transferReference}
           senderName={contribution.memberName}
-          amount={contribution.amount}
-          paymentDate={contribution.paymentDate}
+          amount={formatCurrency(contribution.amount)}
+          date={formatDate(contribution.paymentDate)}
         />
       )}
 

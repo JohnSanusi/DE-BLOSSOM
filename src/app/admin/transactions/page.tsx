@@ -356,7 +356,7 @@ export default function AdminTransactionsPage() {
                       </span>
                     </td>
                     <td className="table-cell">
-                      <Badge variant="outline" className="capitalize text-[10px]">
+                      <Badge variant="default" className="capitalize text-[10px]">
                         {t.category.replace('_', ' ')}
                       </Badge>
                     </td>
