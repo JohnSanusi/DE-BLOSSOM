@@ -9,7 +9,7 @@ import {
   Download,
   FileText,
   ShieldCheck,
-  Maximize2,
+  ExternalLink,
 } from 'lucide-react';
 
 interface ReceiptModalProps {
@@ -21,6 +21,16 @@ interface ReceiptModalProps {
   amount?: string;
   senderName?: string;
   date?: string;
+}
+
+/** Detect if a URL points to a PDF based on extension or query params */
+function isPdfUrl(url: string): boolean {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    return pathname.endsWith('.pdf');
+  } catch {
+    return url.toLowerCase().includes('.pdf');
+  }
 }
 
 export function ReceiptPreviewModal({
@@ -50,14 +60,15 @@ export function ReceiptPreviewModal({
     if (!imageUrl) return;
     const link = document.createElement('a');
     link.href = imageUrl;
-    link.download = `receipt-${reference || 'slip'}.png`;
+    const ext = isPdf ? 'pdf' : 'png';
+    link.download = `receipt-${reference || 'slip'}.${ext}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // If no image is provided, display a fallback mock bank slip graphic
-  const hasValidImage = imageUrl && imageUrl.trim().length > 0;
+  const hasValidFile = imageUrl && imageUrl.trim().length > 0;
+  const isPdf = hasValidFile ? isPdfUrl(imageUrl!) : false;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 animate-fade-in">
@@ -75,6 +86,11 @@ export function ReceiptPreviewModal({
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               <h3 className="text-sm font-bold text-surface-900 dark:text-white">{title}</h3>
+              {isPdf && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  PDF Document
+                </span>
+              )}
               {reference && (
                 <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface-200 dark:bg-slate-800 text-surface-700 dark:text-slate-300">
                   {reference}
@@ -90,40 +106,57 @@ export function ReceiptPreviewModal({
             )}
           </div>
 
-          {/* Quick Toolbar */}
+          {/* Quick Toolbar — zoom/rotate disabled for PDFs */}
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={handleZoomIn}
-              className="p-1.5 rounded-lg text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
-              title="Zoom In"
-              aria-label="Zoom In"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </button>
-            <button
-              onClick={handleZoomOut}
-              className="p-1.5 rounded-lg text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
-              title="Zoom Out"
-              aria-label="Zoom Out"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </button>
-            <button
-              onClick={handleRotate}
-              className="p-1.5 rounded-lg text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
-              title="Rotate 90°"
-              aria-label="Rotate 90 degrees"
-            >
-              <RotateCw className="h-4 w-4" />
-            </button>
-            <button
-              onClick={handleReset}
-              className="px-2 py-1 rounded-lg text-xs font-medium text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors hidden sm:block"
-              title="Reset view"
-            >
-              Reset
-            </button>
-            <div className="h-4 w-px bg-surface-200 dark:bg-darkSurface-border mx-1" />
+            {!isPdf && (
+              <>
+                <button
+                  onClick={handleZoomIn}
+                  className="p-1.5 rounded-lg text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
+                  title="Zoom In"
+                  aria-label="Zoom In"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleZoomOut}
+                  className="p-1.5 rounded-lg text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
+                  title="Zoom Out"
+                  aria-label="Zoom Out"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleRotate}
+                  className="p-1.5 rounded-lg text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
+                  title="Rotate 90°"
+                  aria-label="Rotate 90 degrees"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="px-2 py-1 rounded-lg text-xs font-medium text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors hidden sm:block"
+                  title="Reset view"
+                >
+                  Reset
+                </button>
+                <div className="h-4 w-px bg-surface-200 dark:bg-darkSurface-border mx-1" />
+              </>
+            )}
+            {/* Open in new tab (useful for PDFs) */}
+            {hasValidFile && (
+              <a
+                href={imageUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-lg text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
+                title="Open in new tab"
+                aria-label="Open in new tab"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
             <button
               onClick={handleDownload}
               className="p-1.5 rounded-lg text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
@@ -143,29 +176,35 @@ export function ReceiptPreviewModal({
         </div>
 
         {/* Canvas / Viewport */}
-        <div className="flex-1 overflow-auto p-4 sm:p-8 flex items-center justify-center bg-slate-900/90 min-h-[380px] max-h-[65vh]">
-          {hasValidImage ? (
-            <div
-              className="transition-transform duration-200 ease-out origin-center"
-              style={{
-                transform: `scale(${scale}) rotate(${rotation}deg)`,
-              }}
-            >
-              <img
-                src={imageUrl}
-                alt="Payment receipt proof"
-                className="max-h-[500px] w-auto max-w-full rounded-lg shadow-2xl object-contain border border-slate-700 select-none"
+        <div className="flex-1 overflow-auto flex items-center justify-center bg-slate-900/90 min-h-[380px] max-h-[65vh]">
+          {hasValidFile ? (
+            isPdf ? (
+              /* ── PDF Viewer ── */
+              <iframe
+                src={imageUrl!}
+                title="Payment receipt PDF"
+                className="w-full h-full min-h-[500px] border-0"
+                style={{ minHeight: '500px' }}
               />
-            </div>
+            ) : (
+              /* ── Image Viewer ── */
+              <div
+                className="p-4 sm:p-8 flex items-center justify-center transition-transform duration-200 ease-out origin-center"
+                style={{ transform: `scale(${scale}) rotate(${rotation}deg)` }}
+              >
+                <img
+                  src={imageUrl!}
+                  alt="Payment receipt proof"
+                  className="max-h-[500px] w-auto max-w-full rounded-lg shadow-2xl object-contain border border-slate-700 select-none"
+                />
+              </div>
+            )
           ) : (
-            /* Styled Realistic Mock Bank Slip graphic */
+            /* ── Fallback mock slip (no receipt uploaded) ── */
             <div
-              className="transition-transform duration-200 ease-out origin-center w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl text-slate-800 font-sans border border-slate-200 select-none"
-              style={{
-                transform: `scale(${scale}) rotate(${rotation}deg)`,
-              }}
+              className="transition-transform duration-200 ease-out origin-center w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl text-slate-800 font-sans border border-slate-200 select-none m-6"
+              style={{ transform: `scale(${scale}) rotate(${rotation}deg)` }}
             >
-              {/* Bank Transfer Slip Graphic */}
               <div className="text-center pb-4 border-b border-dashed border-slate-200">
                 <div className="h-10 w-10 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2 font-bold text-lg">
                   ✓
@@ -182,35 +221,27 @@ export function ReceiptPreviewModal({
               <div className="py-4 space-y-2.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Sender:</span>
-                  <span className="font-semibold text-slate-800">{senderName || 'Adaeze Okafor'}</span>
+                  <span className="font-semibold text-slate-800">{senderName || 'Member'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Recipient:</span>
                   <span className="font-semibold text-slate-800">DE-BLOSSOM COOP</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Receiving Bank:</span>
-                  <span className="font-semibold text-slate-800">Zenith Bank Plc</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Account No:</span>
-                  <span className="font-mono font-semibold text-slate-800">1012345678</span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-slate-400">Date & Time:</span>
-                  <span className="text-slate-700">{date || 'Today, 10:45 AM'}</span>
+                  <span className="text-slate-700">{date || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-slate-100">
                   <span className="text-slate-400">Session ID / Ref:</span>
                   <span className="font-mono text-[11px] font-bold text-slate-900 break-all">
-                    {reference || 'NIP-09026724020188941200'}
+                    {reference || 'N/A'}
                   </span>
                 </div>
               </div>
 
               <div className="pt-3 border-t border-dashed border-slate-200 text-center">
                 <p className="text-[10px] text-slate-400">
-                  Verified Payment Instrument • Stored in Secure Cooperative Vault
+                  No receipt image was uploaded with this submission.
                 </p>
               </div>
             </div>
@@ -221,7 +252,9 @@ export function ReceiptPreviewModal({
         <div className="px-5 py-3 border-t border-surface-200 dark:border-darkSurface-border bg-surface-50 dark:bg-darkSurface-bg/50 flex items-center justify-between text-xs text-surface-500 dark:text-slate-400">
           <div className="flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-            <span>Click & drag or use zoom controls to inspect session reference.</span>
+            {isPdf
+              ? 'PDF document — use browser controls to zoom or scroll. Click external link to open in new tab.'
+              : 'Click & drag or use zoom controls to inspect session reference.'}
           </div>
           <button
             onClick={onClose}
