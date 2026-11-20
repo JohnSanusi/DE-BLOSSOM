@@ -23,6 +23,13 @@ import { ThemeToggle } from '@/components/ui/theme-provider';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/supabase/auth-context';
+import {
+  getNotificationsAction,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+  AppNotification,
+} from '@/app/actions/notifications';
+import { ExternalLink } from 'lucide-react';
 
 const navItems = [
   { name: 'Overview', href: '/member', icon: LayoutDashboard },
@@ -42,12 +49,24 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
   const { user, profile, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [memberNotifs, setMemberNotifs] = useState<any[]>([]);
+  const [memberNotifs, setMemberNotifs] = useState<AppNotification[]>([]);
 
-  // When notifications table or user changes, notifications start empty for new real members
+  const fetchNotifs = async () => {
+    if (!user) return;
+    try {
+      const res = await getNotificationsAction();
+      if (res.success && res.notifications) {
+        setMemberNotifs(res.notifications);
+      }
+    } catch (err) {
+      console.error('Failed to load member notifications:', err);
+    }
+  };
+
   useEffect(() => {
-    // Leave notifications clean for live real accounts
-    setMemberNotifs([]);
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 30000);
+    return () => clearInterval(interval);
   }, [user]);
 
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Member';
@@ -55,9 +74,23 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
 
   const unreadCount = memberNotifs.filter((n) => !n.read).length;
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     setMemberNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
+    await markAllNotificationsReadAction();
     addToast('info', 'Notifications', 'All notifications marked as read.');
+  };
+
+  const handleNotificationClick = async (notif: AppNotification) => {
+    if (!notif.read) {
+      setMemberNotifs((prev) =>
+        prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n))
+      );
+      markNotificationReadAction(notif.id).catch(() => {});
+    }
+    setNotificationsOpen(false);
+    if (notif.link) {
+      router.push(notif.link);
+    }
   };
 
   const handleLogout = async () => {
@@ -273,18 +306,33 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
                         memberNotifs.map((n) => (
                           <div
                             key={n.id}
+                            onClick={() => handleNotificationClick(n)}
                             className={cn(
-                              'p-3.5 transition-colors text-left',
-                              !n.read ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : 'hover:bg-slate-50 dark:hover:bg-darkSurface-hover'
+                              'p-3.5 transition-colors text-left cursor-pointer group',
+                              !n.read
+                                ? 'bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/60 dark:hover:bg-emerald-950/40'
+                                : 'hover:bg-slate-50 dark:hover:bg-darkSurface-hover'
                             )}
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <p className="text-xs font-semibold text-surface-900 dark:text-white">{n.title}</p>
+                              <div className="flex items-center gap-1.5">
+                                {!n.read && (
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 shrink-0" />
+                                )}
+                                <p className="text-xs font-semibold text-surface-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                                  {n.title}
+                                </p>
+                              </div>
                               <span className="text-[10px] text-surface-400 whitespace-nowrap">
                                 {formatRelativeTime(n.createdAt)}
                               </span>
                             </div>
                             <p className="text-xs text-surface-600 dark:text-slate-300 mt-1 leading-relaxed">{n.message}</p>
+                            {n.link && (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium inline-flex items-center gap-1 mt-1 opacity-80 group-hover:opacity-100">
+                                View details <ExternalLink className="h-2.5 w-2.5" />
+                              </span>
+                            )}
                           </div>
                         ))
                       )}

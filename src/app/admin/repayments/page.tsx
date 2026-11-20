@@ -32,6 +32,8 @@ import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import { approveRepaymentAction, rejectRepaymentAction } from '@/app/actions/repayments';
+import { ReceiptPreviewModal } from '@/components/ui/receipt-modal';
+import { getReceiptSignedUrl } from '@/app/actions/storage';
 
 export default function AdminRepaymentsPage() {
   const { user } = useAuth();
@@ -51,6 +53,40 @@ export default function AdminRepaymentsPage() {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [approveModalOpen, setApproveModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Receipt preview modal state
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewReceipt, setPreviewReceipt] = useState<{
+    url: string;
+    ref: string;
+    amount: string;
+    senderName: string;
+    date: string;
+  } | null>(null);
+
+  const handleViewReceipt = async (r: any) => {
+    if (!r.receiptUrl) return;
+    try {
+      const signed = await getReceiptSignedUrl(r.receiptUrl);
+      setPreviewReceipt({
+        url: signed || r.receiptUrl,
+        ref: r.ref,
+        amount: formatCurrency(r.amount),
+        senderName: r.memberName,
+        date: formatDate(r.paymentDate),
+      });
+      setPreviewModalOpen(true);
+    } catch {
+      setPreviewReceipt({
+        url: r.receiptUrl,
+        ref: r.ref,
+        amount: formatCurrency(r.amount),
+        senderName: r.memberName,
+        date: formatDate(r.paymentDate),
+      });
+      setPreviewModalOpen(true);
+    }
+  };
 
   const pageSize = 8;
 
@@ -251,6 +287,7 @@ export default function AdminRepaymentsPage() {
                   <th className="table-header">Amount Paid</th>
                   <th className="table-header">Transfer Date</th>
                   <th className="table-header">Bank Reference</th>
+                  <th className="table-header">Payment Proof</th>
                   <th className="table-header">Status</th>
                   <th className="table-header text-right">Verification Action</th>
                 </tr>
@@ -280,6 +317,19 @@ export default function AdminRepaymentsPage() {
                     </td>
                     <td className="table-cell font-mono text-xs text-surface-600 dark:text-slate-400">
                       {r.transferReference}
+                    </td>
+                    <td className="table-cell">
+                      {r.receiptUrl ? (
+                        <button
+                          onClick={() => handleViewReceipt(r)}
+                          className="btn-ghost text-xs px-2 py-1 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 inline-flex items-center gap-1 font-semibold"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View Slip
+                        </button>
+                      ) : (
+                        <span className="text-xs text-surface-400 italic">None</span>
+                      )}
                     </td>
                     <td className="table-cell">
                       <StatusBadge status={r.status} />
@@ -368,6 +418,23 @@ export default function AdminRepaymentsPage() {
             required
           />
         </ConfirmDialog>
+      )}
+
+      {/* Receipt Preview Modal */}
+      {previewReceipt && (
+        <ReceiptPreviewModal
+          isOpen={previewModalOpen}
+          onClose={() => {
+            setPreviewModalOpen(false);
+            setPreviewReceipt(null);
+          }}
+          imageUrl={previewReceipt.url}
+          reference={previewReceipt.ref}
+          amount={previewReceipt.amount}
+          senderName={previewReceipt.senderName}
+          date={previewReceipt.date}
+          title="Loan Repayment Proof Slip"
+        />
       )}
     </div>
   );

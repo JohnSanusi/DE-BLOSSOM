@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { revalidatePath } from 'next/cache';
 import { ActionResult } from './contributions';
+import { notifyAdminsAction, createNotificationAction } from './notifications';
 
 /**
  * Member submits a new loan request
@@ -72,8 +73,17 @@ export async function submitLoanApplicationAction(formData: FormData): Promise<A
       return { success: false, error: error.message };
     }
 
+    // Notify administrators
+    notifyAdminsAction({
+      title: 'New Loan Application',
+      message: `A member applied for a loan of ₦${amountRequested.toLocaleString()} (${tenureMonths} months).`,
+      type: 'loan_application_received',
+      link: '/admin/loan-applications',
+    }).catch(() => {});
+
     revalidatePath('/member/loans');
     revalidatePath('/admin/loans');
+    revalidatePath('/admin/loan-applications');
 
     return {
       success: true,
@@ -139,9 +149,26 @@ export async function reviewLoanApplicationAction(
         purpose: app.purpose,
         status: 'approved',
       });
+
+      createNotificationAction({
+        userId: app.member_id,
+        title: 'Loan Application Approved!',
+        message: `Your loan application for ₦${approvedAmt.toLocaleString()} has been approved. Awaiting executive disbursement.`,
+        type: 'loan_approved',
+        link: '/member/loans',
+      }).catch(() => {});
+    } else if (decision === 'rejected' && app) {
+      createNotificationAction({
+        userId: app.member_id,
+        title: 'Loan Application Decision',
+        message: `Your loan application was not approved: ${notes || 'Review remarks on your application.'}`,
+        type: 'loan_rejected',
+        link: '/member/loans',
+      }).catch(() => {});
     }
 
     revalidatePath('/admin/loans');
+    revalidatePath('/admin/loan-applications');
     revalidatePath('/member/loans');
 
     return {
@@ -183,6 +210,23 @@ export async function disburseLoanAction(loanId: string): Promise<ActionResult> 
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    // Notify member of disbursement
+    const { data: loan } = await supabase
+      .from('loans')
+      .select('member_id, ref, principal_amount')
+      .eq('id', loanId)
+      .maybeSingle();
+
+    if (loan) {
+      createNotificationAction({
+        userId: loan.member_id,
+        title: 'Loan Disbursed to Bank Account',
+        message: `Loan ${loan.ref} (₦${Number(loan.principal_amount).toLocaleString()}) has been disbursed. You can now track your repayment schedule.`,
+        type: 'loan_disbursed',
+        link: `/member/loans/${loanId}`,
+      }).catch(() => {});
     }
 
     revalidatePath('/admin/loans');

@@ -15,6 +15,7 @@ import {
   CreditCard,
   PlusCircle,
   FileText,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { createClient } from '@/lib/supabase/client';
@@ -214,13 +215,23 @@ export default function MemberDashboardPage() {
               <PlusCircle className="h-4 w-4" />
               Make Contribution
             </Link>
-            <Link
-              href="/member/loans/apply"
-              className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 font-medium text-sm px-4 py-2.5 rounded-lg transition-colors"
-            >
-              <Landmark className="h-4 w-4" />
-              Apply for Loan
-            </Link>
+            {summary.outstandingLoanBalance > 0 ? (
+              <Link
+                href="/member/repayments"
+                className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-medium text-sm px-4 py-2.5 rounded-lg shadow-sm transition-colors"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Repay Loan
+              </Link>
+            ) : (
+              <Link
+                href="/member/loans/apply"
+                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 font-medium text-sm px-4 py-2.5 rounded-lg transition-colors"
+              >
+                <Landmark className="h-4 w-4" />
+                Apply for Loan
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -375,6 +386,15 @@ export default function MemberDashboardPage() {
                         <span className="font-bold text-amber-700">{formatCurrency(l.outstandingPrincipal)}</span>
                       </div>
                     </div>
+                    {l.outstandingPrincipal > 0 && (
+                      <Link
+                        href={`/member/repayments?loanId=${l.id}`}
+                        className="btn-primary text-xs w-full py-1.5 flex items-center justify-center gap-1.5 mt-2 shadow-sm"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        Make Repayment
+                      </Link>
+                    )}
                   </div>
                 ))}
 

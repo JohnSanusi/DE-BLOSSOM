@@ -15,6 +15,7 @@ import {
   DollarSign,
   TrendingUp,
   Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import {
   Card,
@@ -132,10 +133,16 @@ export default function MemberLoansPage() {
         title="Cooperative Loans"
         description="Track your cooperative loan facilities, disbursement status, application history, and principal repayment progress."
         actions={
-          <Link href="/member/loans/apply" className="btn-primary text-xs flex items-center gap-2">
-            <PlusCircle className="h-4 w-4" />
-            Apply for Loan
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <Link href="/member/repayments" className="btn-secondary text-xs flex items-center gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Repayments
+            </Link>
+            <Link href="/member/loans/apply" className="btn-primary text-xs flex items-center gap-2">
+              <PlusCircle className="h-4 w-4" />
+              Apply for Loan
+            </Link>
+          </div>
         }
       />
 
@@ -249,12 +256,23 @@ export default function MemberLoansPage() {
                         <StatusBadge status={loan.status} />
                       </td>
                       <td className="table-cell text-right">
-                        <Link
-                          href={`/member/loans/${loan.id}`}
-                          className="btn-secondary text-xs px-2.5 py-1 inline-flex items-center gap-1"
-                        >
-                          Details <ArrowRight className="h-3 w-3" />
-                        </Link>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {(loan.status === 'disbursed' || loan.status === 'repaying') && loan.outstandingPrincipal > 0 && (
+                            <Link
+                              href={`/member/repayments?loanId=${loan.id}`}
+                              className="btn-primary text-xs px-2.5 py-1 inline-flex items-center gap-1 shadow-sm"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              Repay
+                            </Link>
+                          )}
+                          <Link
+                            href={`/member/loans/${loan.id}`}
+                            className="btn-secondary text-xs px-2.5 py-1 inline-flex items-center gap-1"
+                          >
+                            Details <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { revalidatePath } from 'next/cache';
+import { notifyAdminsAction, createNotificationAction } from './notifications';
 
 export interface ActionResult {
   success: boolean;
@@ -65,6 +66,14 @@ export async function submitContributionAction(formData: FormData): Promise<Acti
       return { success: false, error: error.message };
     }
 
+    // Notify administrators of new pending submission
+    notifyAdminsAction({
+      title: 'New Contribution Submitted',
+      message: `${senderName.trim()} submitted ₦${amount.toLocaleString()} (${savingsType} savings) awaiting verification.`,
+      type: 'contribution_submitted',
+      link: `/admin/contributions/${data.id}`,
+    }).catch(() => {});
+
     revalidatePath('/member/contributions');
     revalidatePath('/member');
     revalidatePath('/admin/contributions');
@@ -108,6 +117,23 @@ export async function approveContributionAction(
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    // Notify member of verification
+    const { data: contrib } = await supabase
+      .from('contributions')
+      .select('member_id, amount, ref')
+      .eq('id', contributionId)
+      .maybeSingle();
+
+    if (contrib) {
+      createNotificationAction({
+        userId: contrib.member_id,
+        title: 'Contribution Approved & Posted',
+        message: `Your payment of ₦${Number(contrib.amount).toLocaleString()} (${contrib.ref}) has been verified and posted to your savings.`,
+        type: 'contribution_approved',
+        link: '/member/contributions',
+      }).catch(() => {});
     }
 
     revalidatePath('/admin/contributions');
@@ -154,6 +180,23 @@ export async function rejectContributionAction(
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    // Notify member of rejection
+    const { data: contrib } = await supabase
+      .from('contributions')
+      .select('member_id, ref')
+      .eq('id', contributionId)
+      .maybeSingle();
+
+    if (contrib) {
+      createNotificationAction({
+        userId: contrib.member_id,
+        title: 'Contribution Payment Flagged',
+        message: `Payment ${contrib.ref} could not be verified: ${reason.trim()}`,
+        type: 'contribution_rejected',
+        link: '/member/contributions',
+      }).catch(() => {});
     }
 
     revalidatePath('/admin/contributions');

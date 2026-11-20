@@ -348,6 +348,23 @@ BEFORE UPDATE OR DELETE ON public.audit_logs
 FOR EACH ROW EXECUTE FUNCTION enforce_audit_immutability();
 
 
+-- 13.5 NOTIFICATIONS (In-dashboard member & admin alerts)
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    type TEXT NOT NULL DEFAULT 'info',
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    read BOOLEAN NOT NULL DEFAULT false,
+    link TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_created ON public.notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(user_id, read);
+
+
 -- ==============================================================================
 -- 14. ROW LEVEL SECURITY (RLS) & ACCESS CONTROL POLICIES
 -- ==============================================================================
@@ -362,6 +379,7 @@ ALTER TABLE public.loans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.repayments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- Helper function: Is current authenticated user an admin?
 CREATE OR REPLACE FUNCTION public.is_admin()
@@ -466,6 +484,18 @@ CREATE POLICY "audit_select_admin" ON public.audit_logs
 
 CREATE POLICY "audit_insert_admin" ON public.audit_logs
     FOR INSERT WITH CHECK (public.is_admin() OR auth.uid() IS NOT NULL);
+
+
+-- NOTIFICATIONS POLICIES
+-- Users can view and update their own notifications; admins can view all
+CREATE POLICY "notifications_select" ON public.notifications
+    FOR SELECT USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "notifications_insert" ON public.notifications
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "notifications_update" ON public.notifications
+    FOR UPDATE USING (auth.uid() = user_id OR public.is_admin());
 
 
 -- ==============================================================================
