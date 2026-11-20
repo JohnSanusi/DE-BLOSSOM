@@ -28,6 +28,7 @@ import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { submitContributionAction } from '@/app/actions/contributions';
 import { uploadReceiptAction } from '@/app/actions/storage';
 import { useAuth } from '@/lib/supabase/auth-context';
+import { createClient } from '@/lib/supabase/client';
 
 const cooperativeSettings = {
   bankName: 'First Bank of Nigeria',
@@ -41,9 +42,35 @@ export default function NewContributionPage() {
   const { addToast } = useToast();
   const { user, profile } = useAuth();
 
+  const [bankSettings, setBankSettings] = useState(cooperativeSettings);
   const [type, setType] = useState<SavingsType>('regular');
   const [amount, setAmount] = useState('');
   const [senderName, setSenderName] = useState('');
+
+  React.useEffect(() => {
+    async function loadBankSettings() {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('cooperative_settings')
+          .select('bank_name, bank_account_number, bank_account_name, min_regular_contribution')
+          .limit(1)
+          .maybeSingle();
+
+        if (data && !error) {
+          setBankSettings({
+            bankName: data.bank_name || cooperativeSettings.bankName,
+            bankAccountNumber: data.bank_account_number || cooperativeSettings.bankAccountNumber,
+            bankAccountName: data.bank_account_name || cooperativeSettings.bankAccountName,
+            minRegularContribution: Number(data.min_regular_contribution) || 5000,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load bank settings:', err);
+      }
+    }
+    loadBankSettings();
+  }, []);
 
   React.useEffect(() => {
     if (profile?.full_name) {
@@ -277,20 +304,20 @@ export default function NewContributionPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="p-3 rounded-xl bg-white/10 border border-white/10">
             <span className="text-[11px] text-white/60 block">Bank Name</span>
-            <span className="font-semibold text-sm text-white">{cooperativeSettings.bankName}</span>
+            <span className="font-semibold text-sm text-white">{bankSettings.bankName}</span>
           </div>
 
           <div className="p-3 rounded-xl bg-white/10 border border-white/10 flex items-center justify-between">
             <div>
               <span className="text-[11px] text-white/60 block">Account Number</span>
               <span className="font-mono font-bold text-base text-accent-300">
-                {cooperativeSettings.bankAccountNumber}
+                {bankSettings.bankAccountNumber}
               </span>
             </div>
             <button
               type="button"
               onClick={() =>
-                copyToClipboard(cooperativeSettings.bankAccountNumber, 'Account Number')
+                copyToClipboard(bankSettings.bankAccountNumber, 'Account Number')
               }
               className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors"
               title="Copy account number"
@@ -302,7 +329,7 @@ export default function NewContributionPage() {
           <div className="p-3 rounded-xl bg-white/10 border border-white/10">
             <span className="text-[11px] text-white/60 block">Account Name</span>
             <span className="font-semibold text-xs text-white leading-tight block mt-0.5">
-              {cooperativeSettings.bankAccountName}
+              {bankSettings.bankAccountName}
             </span>
           </div>
         </div>

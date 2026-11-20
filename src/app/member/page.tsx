@@ -45,6 +45,7 @@ const cooperativeSettings = {
 export default function MemberDashboardPage() {
   const { user, profile, isMock } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [bankSettings, setBankSettings] = useState(cooperativeSettings);
   const [liveSummary, setLiveSummary] = useState<any>(null);
   const [liveContributions, setLiveContributions] = useState<any[] | null>(null);
   const [liveLoans, setLiveLoans] = useState<any[] | null>(null);
@@ -55,6 +56,21 @@ export default function MemberDashboardPage() {
     setMounted(true);
     if (!isMock && user) {
       const supabase = createClient();
+
+      supabase
+        .from('cooperative_settings')
+        .select('bank_name, bank_account_number, bank_account_name')
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setBankSettings({
+              bankName: data.bank_name || cooperativeSettings.bankName,
+              bankAccountNumber: data.bank_account_number || cooperativeSettings.bankAccountNumber,
+              bankAccountName: data.bank_account_name || cooperativeSettings.bankAccountName,
+            });
+          }
+        });
       supabase
         .from('member_financial_summary')
         .select('*')
@@ -509,9 +525,9 @@ export default function MemberDashboardPage() {
               Cooperative Bank Account for Transfers
             </h3>
             <p className="text-sm font-semibold text-surface-900">
-              {cooperativeSettings.bankName} •{' '}
-              <span className="font-mono">{cooperativeSettings.bankAccountNumber}</span> •{' '}
-              {cooperativeSettings.bankAccountName}
+              {bankSettings.bankName} •{' '}
+              <span className="font-mono">{bankSettings.bankAccountNumber}</span> •{' '}
+              {bankSettings.bankAccountName}
             </p>
           </div>
         </div>

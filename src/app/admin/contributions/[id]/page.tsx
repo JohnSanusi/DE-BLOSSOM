@@ -45,6 +45,7 @@ export default function AdminContributionReviewPage({ params }: PageProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
 
+  const [bankDetails, setBankDetails] = useState(cooperativeBankFallback);
   const [contribution, setContribution] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [existingLedgerTxn, setExistingLedgerTxn] = useState<any>(null);
@@ -61,11 +62,26 @@ export default function AdminContributionReviewPage({ params }: PageProps) {
       if (!user) return;
       try {
         const supabase = createClient();
-        const { data, error } = await supabase
-          .from('contributions')
-          .select('*, profiles:member_id(full_name, member_ref, email, phone)')
-          .eq('id', contributionId)
-          .maybeSingle();
+        const [{ data, error }, { data: settingsData }] = await Promise.all([
+          supabase
+            .from('contributions')
+            .select('*, profiles:member_id(full_name, member_ref, email, phone)')
+            .eq('id', contributionId)
+            .maybeSingle(),
+          supabase
+            .from('cooperative_settings')
+            .select('bank_name, bank_account_number, bank_account_name')
+            .limit(1)
+            .maybeSingle(),
+        ]);
+
+        if (settingsData) {
+          setBankDetails({
+            bankName: settingsData.bank_name || cooperativeBankFallback.bankName,
+            bankAccountNumber: settingsData.bank_account_number || cooperativeBankFallback.bankAccountNumber,
+            bankAccountName: settingsData.bank_account_name || cooperativeBankFallback.bankAccountName,
+          });
+        }
 
         if (data) {
           // Generate a fresh signed URL for the receipt (storage paths expire)
@@ -285,8 +301,8 @@ export default function AdminContributionReviewPage({ params }: PageProps) {
                 Designated Cooperative Bank Account:
               </span>
               <span>
-                {cooperativeBankFallback.bankName} • Account: {cooperativeBankFallback.bankAccountNumber} (
-                {cooperativeBankFallback.bankAccountName})
+                {bankDetails.bankName} • Account: {bankDetails.bankAccountNumber} (
+                {bankDetails.bankAccountName})
               </span>
             </div>
           </Card>

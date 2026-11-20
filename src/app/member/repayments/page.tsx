@@ -40,6 +40,7 @@ export default function MemberRepaymentsPage() {
   const { user, profile } = useAuth();
   const { addToast } = useToast();
 
+  const [bankSettings, setBankSettings] = useState(cooperativeSettings);
   const [memberLoans, setMemberLoans] = useState<any[]>([]);
   const [memberRepaymentsList, setMemberRepaymentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +61,7 @@ export default function MemberRepaymentsPage() {
       }
       try {
         const supabase = createClient();
-        const [loansRes, repaysRes] = await Promise.all([
+        const [loansRes, repaysRes, settingsRes] = await Promise.all([
           supabase
             .from('loans')
             .select('*')
@@ -71,7 +72,20 @@ export default function MemberRepaymentsPage() {
             .select('*')
             .eq('member_id', user.id)
             .order('submission_date', { ascending: false }),
+          supabase
+            .from('cooperative_settings')
+            .select('bank_name, bank_account_number, bank_account_name')
+            .limit(1)
+            .maybeSingle(),
         ]);
+
+        if (settingsRes?.data) {
+          setBankSettings({
+            bankName: settingsRes.data.bank_name || cooperativeSettings.bankName,
+            bankAccountNumber: settingsRes.data.bank_account_number || cooperativeSettings.bankAccountNumber,
+            bankAccountName: settingsRes.data.bank_account_name || cooperativeSettings.bankAccountName,
+          });
+        }
 
         if (!loansRes.error && loansRes.data) {
           setMemberLoans(
@@ -453,8 +467,8 @@ export default function MemberRepaymentsPage() {
               <div className="p-3 rounded-lg bg-surface-100 border border-surface-200 text-xs space-y-1">
                 <span className="font-semibold text-surface-800">Cooperative Bank Account:</span>
                 <p className="text-surface-600">
-                  {cooperativeSettings.bankName} • Account: {cooperativeSettings.bankAccountNumber} (
-                  {cooperativeSettings.bankAccountName})
+                  {bankSettings.bankName} • Account: {bankSettings.bankAccountNumber} (
+                  {bankSettings.bankAccountName})
                 </p>
               </div>
 

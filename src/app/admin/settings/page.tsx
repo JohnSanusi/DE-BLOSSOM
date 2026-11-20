@@ -85,6 +85,16 @@ export default function AdminSettingsPage() {
             updated_at: new Date().toISOString(),
           })
           .eq('id', settingsId);
+      } else {
+        const { data: newRow } = await supabase
+          .from('cooperative_settings')
+          .insert({
+            cooperative_name: name,
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+        if (newRow?.id) setSettingsId(newRow.id);
       }
       addToast('success', 'Profile Updated', 'Cooperative organization profile updated.');
     } catch (err: any) {
@@ -109,6 +119,18 @@ export default function AdminSettingsPage() {
             updated_at: new Date().toISOString(),
           })
           .eq('id', settingsId);
+      } else {
+        const { data: newRow } = await supabase
+          .from('cooperative_settings')
+          .insert({
+            bank_name: bankName,
+            bank_account_name: bankAccountName,
+            bank_account_number: bankAccountNumber,
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+        if (newRow?.id) setSettingsId(newRow.id);
       }
       addToast(
         'success',
