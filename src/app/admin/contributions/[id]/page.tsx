@@ -70,11 +70,21 @@ export default function AdminContributionReviewPage({ params }: PageProps) {
         if (data) {
           // Generate a fresh signed URL for the receipt (storage paths expire)
           let receiptUrl: string | null = data.receipt_url || null;
-          if (receiptUrl && !receiptUrl.startsWith('http')) {
-            const { data: signedData } = await supabase.storage
-              .from('receipts')
-              .createSignedUrl(receiptUrl, 3600);
-            receiptUrl = signedData?.signedUrl || null;
+          if (receiptUrl) {
+            const storagePath = receiptUrl.includes('/receipts/')
+              ? decodeURIComponent(receiptUrl.split('/receipts/')[1].split('?')[0])
+              : !receiptUrl.startsWith('http')
+              ? receiptUrl
+              : null;
+
+            if (storagePath) {
+              const { data: signedData } = await supabase.storage
+                .from('receipts')
+                .createSignedUrl(storagePath, 3600);
+              if (signedData?.signedUrl) {
+                receiptUrl = signedData.signedUrl;
+              }
+            }
           }
 
           setContribution({

@@ -88,8 +88,8 @@ export default function NewContributionPage() {
 
       setFile(selected);
 
-      // Create preview for image files
-      if (selected.type.startsWith('image/')) {
+      // Create preview for image files and PDFs
+      if (selected.type.startsWith('image/') || selected.type === 'application/pdf') {
         const reader = new FileReader();
         reader.onloadend = () => {
           setFilePreview(reader.result as string);
@@ -498,7 +498,7 @@ export default function NewContributionPage() {
               /* Attached File Card with Instant Preview */
               <div className="p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/40 dark:bg-emerald-950/20 flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
-                  {filePreview ? (
+                  {filePreview && !file.name.toLowerCase().endsWith('.pdf') ? (
                     <img
                       src={filePreview}
                       alt="Receipt preview"
@@ -506,7 +506,10 @@ export default function NewContributionPage() {
                       onClick={() => setReceiptModalOpen(true)}
                     />
                   ) : (
-                    <div className="h-12 w-12 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <div
+                      className="h-12 w-12 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 cursor-pointer"
+                      onClick={() => setReceiptModalOpen(true)}
+                    >
                       <FileCheck className="h-6 w-6" />
                     </div>
                   )}

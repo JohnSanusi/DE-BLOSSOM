@@ -23,14 +23,20 @@ interface ReceiptModalProps {
   date?: string;
 }
 
-/** Detect if a URL points to a PDF based on extension or query params */
+/** Detect if a URL or data URI points to a PDF */
 function isPdfUrl(url: string): boolean {
+  if (!url) return false;
+  const clean = url.trim().toLowerCase();
+  if (clean.startsWith('data:application/pdf')) return true;
   try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return pathname.endsWith('.pdf');
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.toLowerCase();
+    if (pathname.endsWith('.pdf')) return true;
+    if (parsed.search.toLowerCase().includes('.pdf')) return true;
   } catch {
-    return url.toLowerCase().includes('.pdf');
+    // Relative paths or data URIs
   }
+  return clean.includes('.pdf') || clean.includes('application/pdf');
 }
 
 export function ReceiptPreviewModal({
