@@ -76,6 +76,13 @@ export default function AdminContributionsPage() {
       }
     }
     loadContributions();
+    const interval = setInterval(loadContributions, 15000);
+    const onFocus = () => loadContributions();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [user]);
 
   const filteredContributions = useMemo(() => {

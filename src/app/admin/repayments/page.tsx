@@ -129,6 +129,13 @@ export default function AdminRepaymentsPage() {
 
   useEffect(() => {
     loadRepayments();
+    const interval = setInterval(loadRepayments, 15000);
+    const onFocus = () => loadRepayments();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [user]);
 
   const filteredRepayments = useMemo(() => {

@@ -78,6 +78,13 @@ export default function AdminLoansPage() {
       }
     }
     loadLoans();
+    const interval = setInterval(loadLoans, 15000);
+    const onFocus = () => loadLoans();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [user]);
 
   const filteredLoans = useMemo(() => {

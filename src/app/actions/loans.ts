@@ -120,6 +120,24 @@ export async function reviewLoanApplicationAction(
       return { success: false, error: 'Unauthorized.' };
     }
 
+    // Verify existing status to guard against multiple simultaneous reviews
+    const { data: existingApp, error: fetchErr } = await supabase
+      .from('loan_applications')
+      .select('status, ref')
+      .eq('id', applicationId)
+      .maybeSingle();
+
+    if (fetchErr || !existingApp) {
+      return { success: false, error: 'Loan application not found.' };
+    }
+
+    if (existingApp.status !== 'pending' && existingApp.status !== 'under_review') {
+      return {
+        success: false,
+        error: `Loan application ${existingApp.ref} has already been ${existingApp.status} by another administrator.`,
+      };
+    }
+
     const { data: app, error: appError } = await supabase
       .from('loan_applications')
       .update({
@@ -129,11 +147,15 @@ export async function reviewLoanApplicationAction(
         review_remarks: notes || (decision === 'approved' ? 'Approved by Credit Committee' : 'Application declined'),
       })
       .eq('id', applicationId)
+      .in('status', ['pending', 'under_review'])
       .select()
       .single();
 
     if (appError) {
-      return { success: false, error: appError.message };
+      return {
+        success: false,
+        error: 'This loan application was already modified or approved by another administrator.',
+      };
     }
 
     // If approved, create loan facility record awaiting disbursement
@@ -209,7 +231,11 @@ export async function disburseLoanAction(loanId: string): Promise<ActionResult> 
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      const isAlreadyDisbursed = error.message.toLowerCase().includes('cannot be disbursed') || error.message.toLowerCase().includes('already');
+      return {
+        success: false,
+        error: isAlreadyDisbursed ? 'This loan has already been disbursed by another administrator.' : error.message,
+      };
     }
 
     // Notify member of disbursement

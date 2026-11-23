@@ -130,7 +130,11 @@ export async function approveRepaymentAction(
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      const isAlreadyHandled = error.message.toLowerCase().includes('already') || error.message.toLowerCase().includes('not found');
+      return {
+        success: false,
+        error: isAlreadyHandled ? 'This repayment has already been approved or processed by another administrator.' : error.message,
+      };
     }
 
     // Notify member of approval and amortization
@@ -206,7 +210,11 @@ export async function rejectRepaymentAction(
       .single();
 
     if (error) {
-      return { success: false, error: error.message };
+      const isAlreadyHandled = error.message.toLowerCase().includes('already') || error.message.toLowerCase().includes('not found');
+      return {
+        success: false,
+        error: isAlreadyHandled ? 'This repayment has already been approved or processed by another administrator.' : error.message,
+      };
     }
 
     // Notify member of rejection

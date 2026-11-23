@@ -116,7 +116,11 @@ export async function approveContributionAction(
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      const isAlreadyHandled = error.message.toLowerCase().includes('already') || error.message.toLowerCase().includes('not found');
+      return {
+        success: false,
+        error: isAlreadyHandled ? 'This contribution was already processed or verified by another administrator.' : error.message,
+      };
     }
 
     // Notify member of verification
@@ -179,7 +183,11 @@ export async function rejectContributionAction(
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      const isAlreadyHandled = error.message.toLowerCase().includes('already') || error.message.toLowerCase().includes('not found');
+      return {
+        success: false,
+        error: isAlreadyHandled ? 'This contribution was already processed or verified by another administrator.' : error.message,
+      };
     }
 
     // Notify member of rejection

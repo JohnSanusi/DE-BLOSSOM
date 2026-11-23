@@ -92,6 +92,13 @@ export default function AdminLoanApplicationsPage() {
 
   useEffect(() => {
     loadLoanApplications();
+    const interval = setInterval(loadLoanApplications, 15000);
+    const onFocus = () => loadLoanApplications();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [user]);
 
   const filteredApps = useMemo(() => {
