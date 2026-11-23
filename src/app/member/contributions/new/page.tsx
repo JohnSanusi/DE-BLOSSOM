@@ -93,38 +93,63 @@ export default function NewContributionPage() {
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [showIdHelper, setShowIdHelper] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const allowedFormats = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const processFile = (selected: File) => {
     setFileError('');
+    if (!allowedFormats.includes(selected.type)) {
+      setFileError('Unsupported file format. Please upload JPG, PNG, WebP or PDF.');
+      setFile(null);
+      setFilePreview(null);
+      return;
+    }
+    if (selected.size > 8 * 1024 * 1024) {
+      setFileError('Receipt file size exceeds the 8MB limit.');
+      setFile(null);
+      setFilePreview(null);
+      return;
+    }
+
+    setFile(selected);
+
+    // Create preview for image files and PDFs
+    if (selected.type.startsWith('image/') || selected.type === 'application/pdf') {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFilePreview(reader.result as string);
+      };
+      reader.readAsDataURL(selected);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selected = e.target.files[0];
-      if (!allowedFormats.includes(selected.type)) {
-        setFileError('Unsupported file format. Please upload JPG, PNG, WebP or PDF.');
-        setFile(null);
-        setFilePreview(null);
-        return;
-      }
-      if (selected.size > 8 * 1024 * 1024) {
-        setFileError('Receipt file size exceeds the 8MB limit.');
-        setFile(null);
-        setFilePreview(null);
-        return;
-      }
+      processFile(e.target.files[0]);
+    }
+  };
 
-      setFile(selected);
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
 
-      // Create preview for image files and PDFs
-      if (selected.type.startsWith('image/') || selected.type === 'application/pdf') {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setFilePreview(reader.result as string);
-        };
-        reader.readAsDataURL(selected);
-      } else {
-        setFilePreview(null);
-      }
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -490,37 +515,40 @@ export default function NewContributionPage() {
             </div>
 
             {!file ? (
-              <div
-                className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-xl transition-colors bg-surface-50/50 dark:bg-darkSurface-bg/40 ${
-                  fileError
+              <label
+                htmlFor="file-upload"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`mt-1 flex flex-col items-center justify-center px-6 pt-6 pb-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-150 w-full select-none ${
+                  isDragging
+                    ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/40 ring-2 ring-emerald-500/20 scale-[0.99]'
+                    : fileError
                     ? 'border-red-400 dark:border-red-600 bg-red-50/10'
-                    : 'border-surface-300 dark:border-darkSurface-border hover:border-emerald-500'
+                    : 'border-surface-300 dark:border-darkSurface-border hover:border-emerald-500 hover:bg-surface-100/50 dark:hover:bg-darkSurface-hover/40 bg-surface-50/50 dark:bg-darkSurface-bg/40'
                 }`}
               >
-                <div className="space-y-2 text-center">
+                <input
+                  id="file-upload"
+                  name="file-upload"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={handleFileChange}
+                  className="sr-only"
+                />
+                <div className="space-y-2 text-center pointer-events-none">
                   <Upload className="mx-auto h-8 w-8 text-surface-400 dark:text-slate-400" />
                   <div className="text-xs text-surface-600 dark:text-slate-300">
-                    <label
-                      htmlFor="file-upload"
-                      className="relative cursor-pointer rounded-md font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 focus-within:outline-none"
-                    >
-                      <span>Upload receipt photo or PDF</span>
-                      <input
-                        id="file-upload"
-                        name="file-upload"
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,application/pdf"
-                        onChange={handleFileChange}
-                        className="sr-only"
-                      />
-                    </label>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500">
+                      Upload receipt photo or PDF
+                    </span>
                     <span className="text-surface-500 dark:text-slate-400"> or drag and drop</span>
                   </div>
                   <p className="text-[11px] text-surface-400 dark:text-slate-400">
                     JPG, PNG, WebP or PDF receipt screenshot up to 8MB
                   </p>
                 </div>
-              </div>
+              </label>
             ) : (
               /* Attached File Card with Instant Preview */
               <div className="p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/40 dark:bg-emerald-950/20 flex items-center justify-between">

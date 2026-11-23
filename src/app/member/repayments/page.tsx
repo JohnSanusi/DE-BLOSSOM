@@ -66,6 +66,7 @@ function MemberRepaymentsContent() {
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [fileError, setFileError] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Receipt Preview state
@@ -183,32 +184,56 @@ function MemberRepaymentsContent() {
 
   const currentSelectedLoan = activeLoans.find((l) => l.id === selectedLoanId) || activeLoans[0];
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const processFile = (selected: File) => {
     setFileError('');
+    if (!allowedFormats.includes(selected.type)) {
+      setFileError('Unsupported format. Please upload JPG, PNG, WebP or PDF.');
+      setFile(null);
+      setFilePreview(null);
+      return;
+    }
+    if (selected.size > 8 * 1024 * 1024) {
+      setFileError('Receipt file size exceeds 8MB limit.');
+      setFile(null);
+      setFilePreview(null);
+      return;
+    }
+    setFile(selected);
+    if (selected.type.startsWith('image/') || selected.type === 'application/pdf') {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFilePreview(reader.result as string);
+      };
+      reader.readAsDataURL(selected);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selected = e.target.files[0];
-      if (!allowedFormats.includes(selected.type)) {
-        setFileError('Unsupported format. Please upload JPG, PNG, WebP or PDF.');
-        setFile(null);
-        setFilePreview(null);
-        return;
-      }
-      if (selected.size > 8 * 1024 * 1024) {
-        setFileError('Receipt file size exceeds 8MB limit.');
-        setFile(null);
-        setFilePreview(null);
-        return;
-      }
-      setFile(selected);
-      if (selected.type.startsWith('image/') || selected.type === 'application/pdf') {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setFilePreview(reader.result as string);
-        };
-        reader.readAsDataURL(selected);
-      } else {
-        setFilePreview(null);
-      }
+      processFile(e.target.files[0]);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -643,22 +668,33 @@ function MemberRepaymentsContent() {
                 {!file ? (
                   <label
                     htmlFor="repaymentReceiptFile"
-                    className="border-2 border-dashed border-surface-200 dark:border-darkSurface-border hover:border-emerald-600 dark:hover:border-emerald-500 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-surface-50/50 dark:bg-darkSurface-bg/50"
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer transition-all duration-150 w-full select-none ${
+                      isDragging
+                        ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/40 ring-2 ring-emerald-500/20 scale-[0.99]'
+                        : 'border-surface-200 dark:border-darkSurface-border hover:border-emerald-600 dark:hover:border-emerald-500 hover:bg-surface-100/50 dark:hover:bg-darkSurface-hover/40 bg-surface-50/50 dark:bg-darkSurface-bg/50'
+                    }`}
                   >
-                    <Upload className="h-6 w-6 text-emerald-600 mb-1" />
-                    <span className="text-xs font-semibold text-surface-800 dark:text-slate-200">
-                      Upload bank slip or screenshot
-                    </span>
-                    <span className="text-[11px] text-surface-400 mt-0.5">
-                      JPG, PNG, WebP or PDF (up to 8MB)
-                    </span>
                     <input
                       id="repaymentReceiptFile"
                       type="file"
                       accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf"
                       onChange={handleFileChange}
-                      className="hidden"
+                      className="sr-only"
                     />
+                    <div className="space-y-1.5 text-center pointer-events-none">
+                      <div className="mx-auto h-9 w-9 rounded-full bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                        <Upload className="h-5 w-5" />
+                      </div>
+                      <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                        Upload bank slip or screenshot
+                      </p>
+                      <p className="text-[11px] text-surface-400 dark:text-slate-400">
+                        JPG, PNG, WebP or PDF (up to 8MB) or drag & drop
+                      </p>
+                    </div>
                   </label>
                 ) : (
                   <div className="flex items-center justify-between p-3 rounded-xl bg-surface-100 dark:bg-darkSurface-bg border border-surface-200 dark:border-darkSurface-border">
