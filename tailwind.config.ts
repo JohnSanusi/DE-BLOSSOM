@@ -61,6 +61,16 @@ const config: Config = {
       fontFamily: {
         sans: ['Inter', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
+      fontSize: {
+        'fluid-xs': ['clamp(0.7rem, 0.66rem + 0.18vw, 0.775rem)', { lineHeight: '1.4' }],
+        'fluid-sm': ['clamp(0.8rem, 0.76rem + 0.2vw, 0.875rem)', { lineHeight: '1.45' }],
+        'fluid-base': ['clamp(0.875rem, 0.825rem + 0.25vw, 1rem)', { lineHeight: '1.5' }],
+        'fluid-lg': ['clamp(1rem, 0.925rem + 0.4vw, 1.15rem)', { lineHeight: '1.4' }],
+        'fluid-xl': ['clamp(1.125rem, 1rem + 0.6vw, 1.35rem)', { lineHeight: '1.3' }],
+        'fluid-2xl': ['clamp(1.25rem, 1.05rem + 1vw, 1.65rem)', { lineHeight: '1.25' }],
+        'fluid-3xl': ['clamp(1.45rem, 1.2rem + 1.25vw, 2rem)', { lineHeight: '1.2' }],
+        'fluid-stat': ['clamp(1.05rem, 0.9rem + 0.7vw, 1.35rem)', { lineHeight: '1.2' }],
+      },
       boxShadow: {
         card: '0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
         'card-hover': '0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04)',

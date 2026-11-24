@@ -90,10 +90,10 @@ export function StatCard({ title, value, subtitle, icon, trend, tooltip, classNa
         {tooltip && <InfoTooltip content={tooltip} />}
       </div>
       <div className="min-w-0">
-        <p className="text-xs font-semibold text-surface-600 dark:text-slate-300 leading-tight">{title}</p>
-        <p className="text-lg font-bold text-surface-900 dark:text-white mt-1 tracking-tight leading-tight break-all">{value}</p>
+        <p className="font-semibold text-surface-600 dark:text-slate-300 leading-tight [font-size:clamp(0.725rem,0.68rem+0.2vw,0.8125rem)]">{title}</p>
+        <p className="font-bold text-surface-900 dark:text-white mt-1 tracking-tight leading-tight break-all [font-size:clamp(1.05rem,0.85rem+0.8vw,1.45rem)]">{value}</p>
         {subtitle && (
-          <p className="text-[11px] text-surface-500 dark:text-slate-400 mt-0.5 leading-tight">{subtitle}</p>
+          <p className="text-surface-500 dark:text-slate-400 mt-0.5 leading-tight [font-size:clamp(0.6875rem,0.65rem+0.15vw,0.75rem)]">{subtitle}</p>
         )}
         {trend && (
           <p
@@ -421,14 +421,14 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 animate-fade-in">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white tracking-tight">{title}</h1>
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-5 sm:mb-6 animate-fade-in">
+      <div className="min-w-0 flex-1">
+        <h1 className="font-bold text-surface-900 dark:text-white tracking-tight [font-size:clamp(1.2rem,1rem+0.9vw,1.65rem)] leading-tight">{title}</h1>
         {description && (
-          <p className="text-xs text-surface-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">{description}</p>
+          <p className="text-surface-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed [font-size:clamp(0.75rem,0.71rem+0.16vw,0.85rem)]">{description}</p>
         )}
       </div>
-      {actions && <div className="flex items-center gap-2.5">{actions}</div>}
+      {actions && <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 flex-wrap">{actions}</div>}
     </div>
   );
 }

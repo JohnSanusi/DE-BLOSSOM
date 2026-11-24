@@ -199,10 +199,10 @@ export default function MemberDashboardPage() {
               <Sparkles className="h-3.5 w-3.5" />
               <span>Cooperative Member #{displayRef}</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            <h1 className="font-bold tracking-tight [font-size:clamp(1.35rem,1.1rem+1.2vw,1.9rem)] leading-tight">
               Good day, {displayName.split(' ')[0]}
             </h1>
-            <p className="text-surface-200 text-sm mt-1.5 max-w-xl leading-relaxed">
+            <p className="text-surface-200 mt-1.5 max-w-xl leading-relaxed [font-size:clamp(0.8125rem,0.76rem+0.2vw,0.875rem)]">
               Here is an overview of your cooperative savings, loan balances, and recent payment activities.
             </p>
           </div>

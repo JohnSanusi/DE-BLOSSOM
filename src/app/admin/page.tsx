@@ -235,10 +235,10 @@ export default function AdminDashboardPage() {
       {/* Top Header & Range Selection */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-surface-900 dark:text-white tracking-tight">
+          <h1 className="font-bold text-surface-900 dark:text-white tracking-tight [font-size:clamp(1.2rem,1rem+0.9vw,1.65rem)] leading-tight">
             Cooperative Operations Overview
           </h1>
-          <p className="text-xs text-surface-500 dark:text-slate-400 mt-1">
+          <p className="text-surface-500 dark:text-slate-400 mt-1 [font-size:clamp(0.75rem,0.71rem+0.16vw,0.85rem)]">
             Real-time administrative ledger status, verification queues, and member portfolio health.
           </p>
         </div>
