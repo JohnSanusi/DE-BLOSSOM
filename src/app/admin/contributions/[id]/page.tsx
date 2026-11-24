@@ -289,7 +289,7 @@ export default function AdminContributionReviewPage({ params }: PageProps) {
               </div>
               <div>
                 <span className="text-surface-400 dark:text-slate-400 block text-[11px]">Bank Transfer Session ID / Ref</span>
-                <span className="font-mono font-bold text-surface-900 dark:text-white bg-surface-100 dark:bg-darkSurface-input px-2 py-0.5 rounded">
+                <span className="font-mono font-bold text-surface-900 dark:text-white bg-surface-100 dark:bg-darkSurface-input px-2 py-0.5 rounded break-all inline-block max-w-full">
                   {contribution.transferReference}
                 </span>
               </div>

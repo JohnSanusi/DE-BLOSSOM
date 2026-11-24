@@ -87,35 +87,37 @@ export function ReceiptPreviewModal({
       {/* Modal Dialog */}
       <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl bg-white dark:bg-darkSurface-card border border-surface-200 dark:border-darkSurface-border shadow-2xl overflow-hidden z-10">
         {/* Top Header */}
-        <div className="px-5 py-4 border-b border-surface-200 dark:border-darkSurface-border flex items-center justify-between bg-surface-50/70 dark:bg-darkSurface-bg/60">
-          <div>
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <h3 className="text-sm font-bold text-surface-900 dark:text-white">{title}</h3>
+        <div className="px-3.5 py-3 sm:px-5 sm:py-4 border-b border-surface-200 dark:border-darkSurface-border flex items-center justify-between gap-2 bg-surface-50/70 dark:bg-darkSurface-bg/60">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <h3 className="text-xs sm:text-sm font-bold text-surface-900 dark:text-white truncate max-w-[140px] sm:max-w-none">
+                {title}
+              </h3>
               {isPdf && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  PDF Document
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
+                  PDF Slip
                 </span>
               )}
               {reference && (
-                <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface-200 dark:bg-slate-800 text-surface-700 dark:text-slate-300">
+                <span className="font-mono text-[10px] sm:text-xs px-2 py-0.5 rounded bg-surface-200 dark:bg-slate-800 text-surface-700 dark:text-slate-300 max-w-[110px] sm:max-w-[200px] truncate shrink-0">
                   {reference}
                 </span>
               )}
             </div>
             {(amount || senderName || date) && (
-              <p className="text-xs text-surface-500 dark:text-slate-400 mt-1">
-                {amount && <span className="font-bold text-surface-900 dark:text-white mr-2">{amount}</span>}
-                {senderName && <span className="mr-2">From: <strong>{senderName}</strong></span>}
-                {date && <span>• {date}</span>}
+              <p className="text-[11px] sm:text-xs text-surface-500 dark:text-slate-400 mt-1 truncate">
+                {amount && <span className="font-bold text-surface-900 dark:text-white mr-1.5">{amount}</span>}
+                {senderName && <span className="mr-1.5">From: <strong>{senderName}</strong></span>}
+                {date && <span className="hidden xs:inline">• {date}</span>}
               </p>
             )}
           </div>
 
-          {/* Quick Toolbar — zoom/rotate disabled for PDFs */}
-          <div className="flex items-center gap-1.5">
+          {/* Quick Toolbar */}
+          <div className="flex items-center gap-1 shrink-0">
             {!isPdf && (
-              <>
+              <div className="hidden sm:flex items-center gap-1">
                 <button
                   onClick={handleZoomIn}
                   className="p-1.5 rounded-lg text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
@@ -142,25 +144,26 @@ export function ReceiptPreviewModal({
                 </button>
                 <button
                   onClick={handleReset}
-                  className="px-2 py-1 rounded-lg text-xs font-medium text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors hidden sm:block"
+                  className="px-2 py-1 rounded-lg text-xs font-medium text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
                   title="Reset view"
                 >
                   Reset
                 </button>
                 <div className="h-4 w-px bg-surface-200 dark:bg-darkSurface-border mx-1" />
-              </>
+              </div>
             )}
-            {/* Open in new tab (useful for PDFs) */}
+            {/* Open in new tab (native viewer) */}
             {hasValidFile && (
               <a
                 href={imageUrl!}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-1.5 rounded-lg text-surface-600 dark:text-slate-300 hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors"
-                title="Open in new tab"
+                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 transition-colors inline-flex items-center gap-1 text-xs font-semibold"
+                title="Open in native viewer"
                 aria-label="Open in new tab"
               >
-                <ExternalLink className="h-4 w-4" />
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Open Full</span>
               </a>
             )}
             <button
@@ -173,7 +176,7 @@ export function ReceiptPreviewModal({
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-surface-400 hover:text-surface-900 dark:hover:text-white hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors ml-1"
+              className="p-1.5 rounded-lg text-surface-400 hover:text-surface-900 dark:hover:text-white hover:bg-surface-200 dark:hover:bg-darkSurface-hover transition-colors ml-0.5"
               aria-label="Close modal"
             >
               <X className="h-5 w-5" />
@@ -182,20 +185,86 @@ export function ReceiptPreviewModal({
         </div>
 
         {/* Canvas / Viewport */}
-        <div className="flex-1 overflow-auto flex items-center justify-center bg-slate-900/90 min-h-[380px] max-h-[65vh]">
+        <div className="flex-1 overflow-auto flex items-center justify-center bg-slate-900/95 min-h-[340px] max-h-[65vh] p-3 sm:p-6">
           {hasValidFile ? (
             isPdf ? (
-              /* ── PDF Viewer ── */
-              <iframe
-                src={imageUrl!}
-                title="Payment receipt PDF"
-                className="w-full h-full min-h-[500px] border-0"
-                style={{ minHeight: '500px' }}
-              />
+              /* ── PDF Handling (Desktop inline iframe + Mobile dedicated card) ── */
+              <div className="w-full h-full flex flex-col items-center justify-center">
+                {/* Desktop Inline PDF Viewer */}
+                <div className="hidden md:block w-full h-full min-h-[500px]">
+                  <iframe
+                    src={imageUrl!}
+                    title="Payment receipt PDF"
+                    className="w-full h-full min-h-[500px] rounded-lg border border-slate-700 bg-white"
+                  />
+                </div>
+
+                {/* Mobile PDF Document Card */}
+                <div className="block md:hidden w-full max-w-sm rounded-2xl bg-white dark:bg-darkSurface-card p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-darkSurface-border text-center space-y-4 animate-scale-in">
+                  <div className="h-16 w-16 mx-auto rounded-2xl bg-red-100 dark:bg-red-950/80 text-red-600 dark:text-red-400 flex items-center justify-center shadow-sm">
+                    <FileText className="h-8 w-8" />
+                  </div>
+
+                  <div>
+                    <span className="inline-block px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300 border border-red-200 dark:border-red-800 uppercase tracking-wider mb-1.5">
+                      PDF Document Receipt
+                    </span>
+                    <h4 className="text-sm font-bold text-surface-900 dark:text-white">
+                      Official Transfer Evidence Slip
+                    </h4>
+                    <p className="text-xs text-surface-500 dark:text-slate-400 mt-1">
+                      High-resolution bank transmission record attached to this transaction.
+                    </p>
+                  </div>
+
+                  {/* Summary Box */}
+                  <div className="p-3.5 rounded-xl bg-surface-50 dark:bg-darkSurface-bg border border-surface-200 dark:border-darkSurface-border text-left text-xs space-y-1.5">
+                    {amount && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-surface-400 dark:text-slate-400">Amount:</span>
+                        <span className="font-bold text-surface-900 dark:text-white">{amount}</span>
+                      </div>
+                    )}
+                    {senderName && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-surface-400 dark:text-slate-400">Sender:</span>
+                        <span className="font-medium text-surface-800 dark:text-slate-200 truncate max-w-[160px]">{senderName}</span>
+                      </div>
+                    )}
+                    {reference && (
+                      <div className="flex justify-between items-center pt-1 border-t border-surface-200/50 dark:border-darkSurface-border">
+                        <span className="text-surface-400 dark:text-slate-400">Session Ref:</span>
+                        <span className="font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 truncate max-w-[160px]">{reference}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Mobile Actions */}
+                  <div className="space-y-2 pt-1">
+                    <a
+                      href={imageUrl!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full btn-primary text-xs py-2.5 flex items-center justify-center gap-2 shadow-sm font-semibold"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Open Full PDF Slip
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      className="w-full btn-secondary text-xs py-2.5 flex items-center justify-center gap-2 font-medium"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download PDF Document
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : (
-              /* ── Image Viewer ── */
+              /* ── Image Viewer (JPG / PNG / WebP) ── */
               <div
-                className="p-4 sm:p-8 flex items-center justify-center transition-transform duration-200 ease-out origin-center"
+                className="p-2 sm:p-8 flex items-center justify-center transition-transform duration-200 ease-out origin-center max-w-full"
                 style={{ transform: `scale(${scale}) rotate(${rotation}deg)` }}
               >
                 <img
@@ -255,18 +324,20 @@ export function ReceiptPreviewModal({
         </div>
 
         {/* Footer info bar */}
-        <div className="px-5 py-3 border-t border-surface-200 dark:border-darkSurface-border bg-surface-50 dark:bg-darkSurface-bg/50 flex items-center justify-between text-xs text-surface-500 dark:text-slate-400">
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-            {isPdf
-              ? 'PDF document — use browser controls to zoom or scroll. Click external link to open in new tab.'
-              : 'Click & drag or use zoom controls to inspect session reference.'}
+        <div className="px-3.5 py-2.5 sm:px-5 sm:py-3 border-t border-surface-200 dark:border-darkSurface-border bg-surface-50 dark:bg-darkSurface-bg/50 flex items-center justify-between gap-2 text-xs text-surface-500 dark:text-slate-400">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+            <span className="truncate text-[11px] sm:text-xs">
+              {isPdf
+                ? 'PDF document — tap "Open Full" to view with mobile native reader.'
+                : 'Pinch, drag or use toolbar controls to inspect slip.'}
+            </span>
           </div>
           <button
             onClick={onClose}
-            className="btn-secondary text-xs px-3 py-1 font-medium"
+            className="btn-secondary text-xs px-3 py-1 font-medium shrink-0"
           >
-            Close Viewer
+            Close
           </button>
         </div>
       </div>

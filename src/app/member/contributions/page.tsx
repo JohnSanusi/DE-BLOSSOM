@@ -288,7 +288,7 @@ export default function MemberContributionsPage() {
             className="fixed inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setSelectedContribution(null)}
           />
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-modal border border-surface-200">
+          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-darkSurface-card p-4 sm:p-6 shadow-modal border border-surface-200 dark:border-darkSurface-border">
             <div className="flex items-center justify-between pb-3 border-b border-surface-200">
               <div>
                 <span className="text-[10px] uppercase font-bold text-surface-400">Contribution Receipt</span>
@@ -384,25 +384,25 @@ export default function MemberContributionsPage() {
               )}
 
               {/* Receipt preview box */}
-              <div className="border border-surface-200 rounded-xl p-4 bg-surface-50 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center">
+              <div className="border border-surface-200 dark:border-darkSurface-border rounded-xl p-3.5 sm:p-4 bg-surface-50 dark:bg-darkSurface-bg flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="h-10 w-10 rounded-lg bg-brand-100 text-brand-700 dark:bg-emerald-950 dark:text-emerald-300 flex items-center justify-center shrink-0">
                     <FileText className="h-5 w-5" />
                   </div>
-                  <div>
-                    <p className="text-xs font-semibold text-surface-900">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-surface-900 dark:text-white truncate">
                       transfer_receipt_{selectedContribution.transferReference}.pdf
                     </p>
-                    <p className="text-[10px] text-surface-400">PDF Document • 428 KB</p>
+                    <p className="text-[10px] text-surface-400 dark:text-slate-400">PDF Document • Attached Proof</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => alert('Demo: Downloading payment proof receipt.')}
-                  className="btn-secondary text-xs p-2 flex items-center gap-1.5"
+                  className="btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1.5 shrink-0"
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Receipt
+                  <span className="hidden xs:inline">Receipt</span>
                 </button>
               </div>
             </div>
