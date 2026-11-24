@@ -325,7 +325,7 @@ interface TabsProps {
 
 export function Tabs({ tabs, activeTab, onChange }: TabsProps) {
   return (
-    <div className="flex border-b border-surface-200 dark:border-darkSurface-border overflow-x-auto">
+    <div className="flex border-b border-surface-200 dark:border-darkSurface-border overflow-x-auto no-scrollbar scroll-smooth">
       {tabs.map((tab) => (
         <button
           key={tab.value}

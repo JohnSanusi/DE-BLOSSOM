@@ -190,7 +190,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 lg:hidden flex animate-fade-in">
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
-            <div className="relative w-72 bg-white dark:bg-darkSurface-card flex flex-col h-full shadow-2xl transition-colors">
+            <div className="relative w-72 max-w-[85vw] bg-white dark:bg-darkSurface-card flex flex-col h-full shadow-2xl transition-colors">
               <div className="p-4 border-b border-surface-200 dark:border-darkSurface-border flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="h-8 w-8 rounded-lg bg-brand-900 dark:bg-emerald-600 flex items-center justify-center text-white font-bold text-sm">
@@ -258,7 +258,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )}
 
         {/* Admin Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden">
           {/* Header Bar */}
           <header className="h-16 bg-white dark:bg-darkSurface-card border-b border-surface-200 dark:border-darkSurface-border flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-20 transition-colors duration-200">
             <div className="flex items-center gap-3">
@@ -298,7 +298,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 {notificationsOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setNotificationsOpen(false)} />
-                    <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-darkSurface-card rounded-2xl shadow-modal border border-surface-200 dark:border-darkSurface-border z-50 overflow-hidden animate-scale-in">
+                    <div className="fixed sm:absolute inset-x-3 sm:inset-x-auto sm:right-0 top-16 sm:top-auto sm:mt-2 w-auto sm:w-96 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-darkSurface-card rounded-2xl shadow-modal border border-surface-200 dark:border-darkSurface-border z-50 overflow-hidden animate-scale-in">
                     <div className="p-3.5 border-b border-surface-200 dark:border-darkSurface-border flex items-center justify-between bg-surface-50 dark:bg-darkSurface-bg">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-surface-900 dark:text-white">Operations Feed</span>

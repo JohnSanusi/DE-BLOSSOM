@@ -540,11 +540,11 @@ export default function MemberDashboardPage() {
           <div className="h-10 w-10 rounded-lg bg-brand-900 text-white flex items-center justify-center shrink-0">
             <CreditCard className="h-5 w-5" />
           </div>
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-surface-500">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-surface-500 dark:text-slate-400">
               Cooperative Bank Account for Transfers
             </h3>
-            <p className="text-sm font-semibold text-surface-900">
+            <p className="text-xs sm:text-sm font-semibold text-surface-900 dark:text-white break-words mt-0.5">
               {bankSettings.bankName} •{' '}
               <span className="font-mono">{bankSettings.bankAccountNumber}</span> •{' '}
               {bankSettings.bankAccountName}

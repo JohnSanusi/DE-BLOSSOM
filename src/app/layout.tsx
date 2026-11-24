@@ -1,8 +1,16 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ToastProvider } from '@/components/ui/toast';
 import { ThemeProvider } from '@/components/ui/theme-provider';
 import { AuthProvider } from '@/lib/supabase/auth-context';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   title: 'DE-BLOSSOM — Cooperative Financial Management',
