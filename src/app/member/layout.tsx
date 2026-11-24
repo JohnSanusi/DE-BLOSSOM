@@ -65,9 +65,22 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     fetchNotifs();
-    const interval = setInterval(fetchNotifs, 30000);
-    return () => clearInterval(interval);
+    const handleFocus = () => fetchNotifs();
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(fetchNotifs, 10000);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
   }, [user]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNotificationsOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Member';
   const displayRef = profile?.member_ref || (profile as any)?.member_number || 'Pending ID';
@@ -276,7 +289,9 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
                 </button>
 
                 {notificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-darkSurface-card rounded-2xl shadow-modal border border-surface-200 dark:border-darkSurface-border z-50 overflow-hidden animate-scale-in">
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setNotificationsOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-darkSurface-card rounded-2xl shadow-modal border border-surface-200 dark:border-darkSurface-border z-50 overflow-hidden animate-scale-in">
                     <div className="p-3.5 border-b border-surface-200 dark:border-darkSurface-border flex items-center justify-between bg-surface-50 dark:bg-darkSurface-bg">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-surface-900 dark:text-white">Notifications</span>
@@ -338,8 +353,9 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
                       )}
                     </div>
                   </div>
-                )}
-              </div>
+                </>
+              )}
+            </div>
 
               {/* User Avatar & name */}
               <Link

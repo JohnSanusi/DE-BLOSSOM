@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { revalidatePath } from 'next/cache';
 
@@ -100,26 +100,26 @@ export async function getNotificationsAction(): Promise<NotificationResult> {
     // If dbNotifications are empty or table doesn't exist yet, synthesize live notifications from recent events
     if (dbNotifications.length === 0) {
       if (isAdmin) {
-        // Synthesize for admin from pending submissions
+        // Synthesize for admin from pending submissions without brittle relational joins
         const [pendingContribs, pendingLoans, pendingRepays] = await Promise.all([
           supabase
             .from('contributions')
-            .select('id, ref, amount, sender_name, submission_date, profiles:member_id(full_name)')
+            .select('id, ref, amount, sender_name, submission_date')
             .eq('status', 'pending')
             .order('submission_date', { ascending: false })
-            .limit(5),
+            .limit(10),
           supabase
             .from('loan_applications')
-            .select('id, ref, requested_amount, application_date, profiles:member_id(full_name)')
+            .select('id, ref, requested_amount, application_date, member_id')
             .eq('status', 'pending')
             .order('application_date', { ascending: false })
-            .limit(5),
+            .limit(10),
           supabase
             .from('repayments')
-            .select('id, ref, amount, submission_date, profiles:member_id(full_name)')
+            .select('id, ref, amount, submission_date, depositor_name')
             .eq('status', 'pending')
             .order('submission_date', { ascending: false })
-            .limit(5),
+            .limit(10),
         ]);
 
         const synthetic: AppNotification[] = [];
@@ -130,7 +130,7 @@ export async function getNotificationsAction(): Promise<NotificationResult> {
             userId: user.id,
             type: 'contribution_submitted',
             title: 'Pending Contribution Verification',
-            message: `${(c.profiles as any)?.full_name || c.sender_name || 'A member'} submitted ₦${Number(c.amount).toLocaleString()} (${c.ref}) awaiting review.`,
+            message: `${c.sender_name || 'A member'} submitted ₦${Number(c.amount).toLocaleString()} (${c.ref}) awaiting review.`,
             read: false,
             link: `/admin/contributions/${c.id}`,
             createdAt: c.submission_date || new Date().toISOString(),
@@ -143,7 +143,7 @@ export async function getNotificationsAction(): Promise<NotificationResult> {
             userId: user.id,
             type: 'loan_application_received',
             title: 'New Loan Request Pending Review',
-            message: `${(l.profiles as any)?.full_name || 'A member'} requested ₦${Number(l.requested_amount).toLocaleString()} (${l.ref}).`,
+            message: `A loan application for ₦${Number(l.requested_amount).toLocaleString()} (${l.ref}) requires administrator approval.`,
             read: false,
             link: '/admin/loan-applications',
             createdAt: l.application_date || new Date().toISOString(),
@@ -156,7 +156,7 @@ export async function getNotificationsAction(): Promise<NotificationResult> {
             userId: user.id,
             type: 'repayment_submitted',
             title: 'Loan Repayment Awaiting Reconciliation',
-            message: `${(r.profiles as any)?.full_name || 'A member'} submitted an installment of ₦${Number(r.amount).toLocaleString()} (${r.ref}).`,
+            message: `${r.depositor_name || 'A member'} submitted an installment of ₦${Number(r.amount).toLocaleString()} (${r.ref}).`,
             read: false,
             link: '/admin/repayments',
             createdAt: r.submission_date || new Date().toISOString(),
@@ -312,7 +312,13 @@ export async function createNotificationAction({
   }
 
   try {
-    const supabase = await createClient();
+    let supabase;
+    try {
+      supabase = createAdminClient();
+    } catch {
+      supabase = await createClient();
+    }
+
     const { error } = await supabase.from('notifications').insert({
       user_id: userId,
       title,
@@ -350,7 +356,13 @@ export async function notifyAdminsAction({
   if (!isSupabaseConfigured()) return;
 
   try {
-    const supabase = await createClient();
+    let supabase;
+    try {
+      supabase = createAdminClient();
+    } catch {
+      supabase = await createClient();
+    }
+
     const { data: admins } = await supabase
       .from('profiles')
       .select('id')
